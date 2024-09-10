@@ -42,6 +42,25 @@ struct CacheImpl : Cache
 
         state->db = SQLite(dbPath);
         state->db.isCache();
+
+        // Check if the 'domain' column exists in the 'Cache' table
+        SQLiteStmt pragmaStmt(state->db, "pragma table_info(Cache)");
+        bool domainColumnExists = false;
+        {
+            auto use(pragmaStmt.use());
+            while (use.next()) {
+                std::string columnName = use.getStr(1);
+                if (columnName == "domain") {
+                    domainColumnExists = true;
+                    break;
+                }
+            }
+        }
+
+        // If 'domain' column does not exist, drop the 'Cache' table
+        if (!domainColumnExists) {
+            state->db.exec("drop table if exists Cache");
+        }
         state->db.exec(schema);
 
         state->upsert.create(state->db,
