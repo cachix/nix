@@ -1701,6 +1701,8 @@ static void prim_pathExists(EvalState & state, const PosIdx pos, Value * * args,
             mustBeDir ? SymlinkResolution::Full : SymlinkResolution::Ancestors;
         auto path = realisePath(state, pos, arg, symlinkResolution);
 
+        printTalkative("devenv pathExists: '%1%'", path);
+
         auto st = path.maybeLstat();
         auto exists = st && (!mustBeDir || st->type == SourceAccessor::tDirectory);
         v.mkBool(exists);
