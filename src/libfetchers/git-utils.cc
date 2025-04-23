@@ -295,13 +295,14 @@ struct GitRepoImpl : GitRepo, std::enable_shared_from_this<GitRepoImpl>
 
         // Usually ignored, so add it manually
         if (pathExists(cwd / ".devenv.flake.nix")) {
+            info.files.insert(CanonPath((cwd / ".devenv/cli-options.nix").string()).removePrefix(CanonPath(path.string())).rel());
             info.files.insert(CanonPath((cwd / ".devenv.flake.nix").string()).removePrefix(CanonPath(path.string())).rel());
             info.files.insert(CanonPath((cwd / ".devenv/flake.json").string()).removePrefix(CanonPath(path.string())).rel());
-            info.files.insert(CanonPath((cwd / ".devenv/devenv.json").string()).removePrefix(CanonPath(path.string())).rel());
             // support devenv test
             for (const auto & entry : fs::directory_iterator(cwd)) {
                 if (entry.path().filename().string().find(".devenv.") == 0 && fs::is_directory(entry.path())) {
-                    // add flake.json and devenv.json
+                    // add flake.json, devenv.json and cli-options.nix
+                    info.files.insert(CanonPath((cwd / entry.path() / "cli-options.nix").string()).removePrefix(CanonPath(path.string())).rel());
                     info.files.insert(CanonPath((cwd / entry.path() / "flake.json").string()).removePrefix(CanonPath(path.string())).rel());
                     info.files.insert(CanonPath((cwd / entry.path() / "devenv.json").string()).removePrefix(CanonPath(path.string())).rel());
                 }
