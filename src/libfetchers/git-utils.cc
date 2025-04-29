@@ -452,6 +452,7 @@ struct GitRepoImpl : GitRepo, std::enable_shared_from_this<GitRepoImpl>
             info.files.insert(CanonPath((cwd / ".devenv/cli-options.nix").string()).removePrefix(CanonPath(path.string())).rel());
             info.files.insert(CanonPath((cwd / ".devenv.flake.nix").string()).removePrefix(CanonPath(path.string())).rel());
             info.files.insert(CanonPath((cwd / ".devenv/flake.json").string()).removePrefix(CanonPath(path.string())).rel());
+	    info.files.insert(CanonPath((cwd / ".devenv/devenv.json").string()).removePrefix(CanonPath(path.string())).rel());
             // support devenv test
             for (const auto & entry : fs::directory_iterator(cwd)) {
                 if (entry.path().filename().string().find(".devenv.") == 0 && fs::is_directory(entry.path())) {
