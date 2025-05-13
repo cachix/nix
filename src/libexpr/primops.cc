@@ -962,7 +962,7 @@ static void prim_getEnv(EvalState & state, const PosIdx pos, Value * * args, Val
 {
     std::string name(state.forceStringNoCtx(*args[0], pos, "while evaluating the first argument passed to builtins.getEnv"));
     printTalkative("devenv getEnv: '%1%'", name);
-    v.mkString(state.settings.restrictEval || state.settings.pureEval ? "" : getEnv(name).value_or(""));
+    v.mkString(getEnv(name).value_or(""));
 }
 
 static RegisterPrimOp primop_getEnv({
