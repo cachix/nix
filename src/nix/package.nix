@@ -95,6 +95,8 @@ mkMesonExecutable (finalAttrs: {
   mesonFlags = [
   ];
 
+  doCheck = false;
+
   postInstall = lib.optionalString stdenv.hostPlatform.isStatic ''
     mkdir -p $out/nix-support
     echo "file binary-dist $out/bin/nix" >> $out/nix-support/hydra-build-products
