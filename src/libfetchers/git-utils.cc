@@ -35,6 +35,8 @@
 #include <regex>
 #include <span>
 
+namespace fs = std::filesystem;
+
 namespace std {
 
 template<> struct hash<git_oid>
@@ -432,6 +434,8 @@ struct GitRepoImpl : GitRepo, std::enable_shared_from_this<GitRepoImpl>
 
         git_status_options options = GIT_STATUS_OPTIONS_INIT;
         options.flags |= GIT_STATUS_OPT_INCLUDE_UNMODIFIED;
+        options.flags |= GIT_STATUS_OPT_INCLUDE_UNTRACKED;
+        options.flags |= GIT_STATUS_OPT_RECURSE_UNTRACKED_DIRS;
         options.flags |= GIT_STATUS_OPT_EXCLUDE_SUBMODULES;
         if (git_status_foreach_ext(*this, &options, &statusCallbackTrampoline, &statusCallback))
             throw Error("getting working directory status: %s", git_error_last()->message);
@@ -440,6 +444,35 @@ struct GitRepoImpl : GitRepo, std::enable_shared_from_this<GitRepoImpl>
         auto modulesFile = path / ".gitmodules";
         if (pathExists(modulesFile.string()))
             info.submodules = parseSubmodules(modulesFile);
+
+        fs::path cwd = fs::current_path();
+
+        // Usually ignored, so add it manually
+        if (pathExists(cwd / ".devenv.flake.nix")) {
+            info.files.insert(CanonPath((cwd / ".devenv.flake.nix").string()).removePrefix(CanonPath(path.string())).rel());
+            info.files.insert(CanonPath((cwd / ".devenv/flake.json").string()).removePrefix(CanonPath(path.string())).rel());
+            info.files.insert(CanonPath((cwd / ".devenv/devenv.json").string()).removePrefix(CanonPath(path.string())).rel());
+            // support devenv test
+            for (const auto & entry : fs::directory_iterator(cwd)) {
+                if (entry.path().filename().string().find(".devenv.") == 0 && fs::is_directory(entry.path())) {
+                    // add flake.json and devenv.json
+                    info.files.insert(CanonPath((cwd / entry.path() / "flake.json").string()).removePrefix(CanonPath(path.string())).rel());
+                    info.files.insert(CanonPath((cwd / entry.path() / "devenv.json").string()).removePrefix(CanonPath(path.string())).rel());
+                }
+            }
+        }
+        if (pathExists(cwd / "devenv.local.nix")) {
+            info.files.insert(CanonPath((cwd / "devenv.local.nix").string()).removePrefix(CanonPath(path.string())).rel());
+        }
+        if (pathExists(cwd / "devenv.nix")) {
+            info.files.insert(CanonPath((cwd / "devenv.nix").string()).removePrefix(CanonPath(path.string())).rel());
+        }
+        // find all files that begin with .env
+        for (const auto & entry : fs::directory_iterator(cwd)) {
+            if (entry.path().filename().string().find(".env") == 0) {
+                info.files.insert(CanonPath((cwd / entry.path()).string()).removePrefix(CanonPath(path.string())).rel());
+            }
+        }
 
         return info;
     }

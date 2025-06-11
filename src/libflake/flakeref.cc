@@ -112,10 +112,10 @@ std::pair<FlakeRef, std::string> parsePathFlakeRefWithFragment(
         if (isFlake) {
 
             if (!S_ISDIR(lstat(path).st_mode)) {
-                if (baseNameOf(path) == "flake.nix") {
+                if (baseNameOf(path) == ".devenv.flake.nix") {
                     // Be gentle with people who accidentally write `/foo/bar/flake.nix` instead of `/foo/bar`
                     warn(
-                        "Path '%s' should point at the directory containing the 'flake.nix' file, not the file itself. "
+                        "Path '%s' should point at the directory containing the 'devenv.nix' file, not the file itself. "
                         "Pretending that you meant '%s'"
                         , path, dirOf(path));
                     path = dirOf(path);
@@ -124,18 +124,18 @@ std::pair<FlakeRef, std::string> parsePathFlakeRefWithFragment(
                 }
             }
 
-            if (!allowMissing && !pathExists(path + "/flake.nix")){
-                notice("path '%s' does not contain a 'flake.nix', searching up",path);
+            if (!allowMissing && !pathExists(path + "/.devenv.flake.nix")){
+                notice("path '%s' does not contain a 'devenv.flake.nix', searching up",path);
 
                 // Save device to detect filesystem boundary
                 dev_t device = lstat(path).st_dev;
                 bool found = false;
                 while (path != "/") {
-                    if (pathExists(path + "/flake.nix")) {
+                    if (pathExists(path + "/.devenv.flake.nix")) {
                         found = true;
                         break;
                     } else if (pathExists(path + "/.git"))
-                        throw Error("path '%s' is not part of a flake (neither it nor its parent directories contain a 'flake.nix' file)", path);
+                        throw Error("path '%s' is not part of a flake (neither it nor its parent directories contain a '.devenv.flake.nix' file)", path);
                     else {
                         if (lstat(path).st_dev != device)
                             throw Error("unable to find a flake before encountering filesystem boundary at '%s'", path);
@@ -143,11 +143,11 @@ std::pair<FlakeRef, std::string> parsePathFlakeRefWithFragment(
                     path = dirOf(path);
                 }
                 if (!found)
-                    throw BadURL("could not find a flake.nix file");
+                    throw BadURL("could not find a .devenv.flake.nix file");
             }
 
-            if (!allowMissing && !pathExists(path + "/flake.nix"))
-                throw BadURL("path '%s' is not a flake (because it doesn't contain a 'flake.nix' file)", path);
+            if (!allowMissing && !pathExists(path + "/.devenv.flake.nix"))
+                throw BadURL("path '%s' is not a flake (because it doesn't contain a '.devenv.flake.nix' file)", path);
 
             auto flakeRoot = path;
             std::string subdir;

@@ -111,7 +111,7 @@ struct Flake
 
     SourcePath lockFilePath()
     {
-        return path.parent() / "flake.lock";
+        return path.parent() / "devenv.lock";
     }
 };
 
