@@ -1,0 +1,22 @@
+From 6151cd73cbd828f2a2dd6ddd45852680bc386931 Mon Sep 17 00:00:00 2001
+From: Sander <hey@sandydoo.me>
+Date: Tue, 28 Jan 2025 09:41:03 +0000
+Subject: [PATCH] pathExists: log which path is being accessed
+
+---
+ src/libexpr/primops.cc | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/libexpr/primops.cc b/src/libexpr/primops.cc
+index 5375e3a7f2e..60cf75cc96e 100644
+--- a/src/libexpr/primops.cc
++++ b/src/libexpr/primops.cc
+@@ -1701,6 +1701,8 @@ static void prim_pathExists(EvalState & state, const PosIdx pos, Value * * args,
+             mustBeDir ? SymlinkResolution::Full : SymlinkResolution::Ancestors;
+         auto path = realisePath(state, pos, arg, symlinkResolution);
+ 
++        printTalkative("devenv pathExists: '%1%'", path);
++
+         auto st = path.maybeLstat();
+         auto exists = st && (!mustBeDir || st->type == SourceAccessor::tDirectory);
+         v.mkBool(exists);

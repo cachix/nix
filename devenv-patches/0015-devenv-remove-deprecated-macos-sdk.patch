@@ -1,0 +1,25 @@
+From 84195c7ac80bbadcafeb3a81ad0d42a51cd08576 Mon Sep 17 00:00:00 2001
+From: Sander <hey@sandydoo.me>
+Date: Tue, 17 Jun 2025 01:40:47 +0200
+Subject: [PATCH] devenv: remove deprecated macos sdk
+
+---
+ src/libstore/package.nix | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/src/libstore/package.nix b/src/libstore/package.nix
+index 775776139..77adb2646 100644
+--- a/src/libstore/package.nix
++++ b/src/libstore/package.nix
+@@ -65,8 +65,6 @@ mkMesonLibrary (finalAttrs: {
+       sqlite
+     ]
+     ++ lib.optional stdenv.hostPlatform.isLinux libseccomp
+-    # There have been issues building these dependencies
+-    ++ lib.optional stdenv.hostPlatform.isDarwin darwin.apple_sdk.libs.sandbox
+     ++ lib.optional withAWS aws-sdk-cpp;
+ 
+   propagatedBuildInputs = [
+-- 
+2.49.0
+

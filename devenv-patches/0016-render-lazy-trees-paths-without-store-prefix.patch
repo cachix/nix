@@ -1,0 +1,178 @@
+From a69b99ade04482fe8580e9a9f87172dbb9e0bee9 Mon Sep 17 00:00:00 2001
+From: Eelco Dolstra <edolstra@gmail.com>
+Date: Fri, 6 Jun 2025 19:40:57 +0200
+Subject: [PATCH 1/3] Add ForwardingSourceAccessor
+
+---
+ .../nix/util/forwarding-source-accessor.hh    | 57 +++++++++++++++++++
+ src/libutil/include/nix/util/meson.build      |  1 +
+ 2 files changed, 58 insertions(+)
+ create mode 100644 src/libutil/include/nix/util/forwarding-source-accessor.hh
+
+diff --git a/src/libutil/include/nix/util/forwarding-source-accessor.hh b/src/libutil/include/nix/util/forwarding-source-accessor.hh
+new file mode 100644
+index 00000000000..bdba2addcb0
+--- /dev/null
++++ b/src/libutil/include/nix/util/forwarding-source-accessor.hh
+@@ -0,0 +1,57 @@
++#pragma once
++
++#include "source-accessor.hh"
++
++namespace nix {
++
++/**
++ * A source accessor that just forwards every operation to another
++ * accessor. This is not useful in itself but can be used as a
++ * superclass for accessors that do change some operations.
++ */
++struct ForwardingSourceAccessor : SourceAccessor
++{
++    ref<SourceAccessor> next;
++
++    ForwardingSourceAccessor(ref<SourceAccessor> next)
++        : next(next)
++    {
++    }
++
++    std::string readFile(const CanonPath & path) override
++    {
++        return next->readFile(path);
++    }
++
++    void readFile(const CanonPath & path, Sink & sink, std::function<void(uint64_t)> sizeCallback) override
++    {
++        next->readFile(path, sink, sizeCallback);
++    }
++
++    std::optional<Stat> maybeLstat(const CanonPath & path) override
++    {
++        return next->maybeLstat(path);
++    }
++
++    DirEntries readDirectory(const CanonPath & path) override
++    {
++        return next->readDirectory(path);
++    }
++
++    std::string readLink(const CanonPath & path) override
++    {
++        return next->readLink(path);
++    }
++
++    std::string showPath(const CanonPath & path) override
++    {
++        return next->showPath(path);
++    }
++
++    std::optional<std::filesystem::path> getPhysicalPath(const CanonPath & path) override
++    {
++        return next->getPhysicalPath(path);
++    }
++};
++
++}
+diff --git a/src/libutil/include/nix/util/meson.build b/src/libutil/include/nix/util/meson.build
+index 329d4061218..3dacfafc6d9 100644
+--- a/src/libutil/include/nix/util/meson.build
++++ b/src/libutil/include/nix/util/meson.build
+@@ -34,6 +34,7 @@ headers = files(
+   'file-system.hh',
+   'finally.hh',
+   'fmt.hh',
++  'forwarding-source-accessor.hh',
+   'fs-sink.hh',
+   'git.hh',
+   'hash.hh',
+
+From e18b1637dc7311724b264000556a94fd65766492 Mon Sep 17 00:00:00 2001
+From: Eelco Dolstra <edolstra@gmail.com>
+Date: Fri, 6 Jun 2025 19:41:12 +0200
+Subject: [PATCH 2/3] Fix display of paths in substituted source trees
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+These got displayed as e.g.
+
+  «github:NixOS/nixpkgs/adaa24fbf46737f3f1b5497bf64bae750f82942e?narHash=sha256-qhFMmDkeJX9KJwr5H32f1r7Prs7XbQWtO0h3V0a0rFY%3D»/nix/store/x9wnkly3k1gkq580m90jjn32q9f05q2v-source/pkgs/stdenv/generic/source-stdenv.sh
+
+Now we get
+
+  «github:NixOS/nixpkgs/adaa24fbf46737f3f1b5497bf64bae750f82942e?narHash=sha256-qhFMmDkeJX9KJwr5H32f1r7Prs7XbQWtO0h3V0a0rFY%3D»/pkgs/stdenv/generic/source-stdenv.sh
+---
+ src/libfetchers/fetchers.cc | 20 +++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/src/libfetchers/fetchers.cc b/src/libfetchers/fetchers.cc
+index 614b3c90e69..9beef69f075 100644
+--- a/src/libfetchers/fetchers.cc
++++ b/src/libfetchers/fetchers.cc
+@@ -5,6 +5,7 @@
+ #include "nix/util/json-utils.hh"
+ #include "nix/fetchers/store-path-accessor.hh"
+ #include "nix/fetchers/fetch-settings.hh"
++#include "nix/util/forwarding-source-accessor.hh"
+ 
+ #include <nlohmann/json.hpp>
+ 
+@@ -293,6 +294,21 @@ std::pair<ref<SourceAccessor>, Input> Input::getAccessor(ref<Store> store) const
+     }
+ }
+ 
++/**
++ * Helper class that ensures that paths in substituted source trees
++ * are rendered as `«input»/path` rather than
++ * `«input»/nix/store/<hash>-source/path`.
++ */
++struct SubstitutedSourceAccessor : ForwardingSourceAccessor
++{
++    using ForwardingSourceAccessor::ForwardingSourceAccessor;
++
++    std::string showPath(const CanonPath & path) override
++    {
++        return displayPrefix + path.abs() + displaySuffix;;
++    }
++};
++
+ std::pair<ref<SourceAccessor>, Input> Input::getAccessorUnchecked(ref<Store> store) const
+ {
+     // FIXME: cache the accessor
+@@ -320,10 +336,12 @@ std::pair<ref<SourceAccessor>, Input> Input::getAccessorUnchecked(ref<Store> sto
+             debug("using substituted/cached input '%s' in '%s'",
+                 to_string(), store->printStorePath(storePath));
+ 
+-            auto accessor = makeStorePathAccessor(store, storePath);
++            auto accessor = make_ref<SubstitutedSourceAccessor>(makeStorePathAccessor(store, storePath));
+ 
+             accessor->fingerprint = getFingerprint(store);
+ 
++            // FIXME: ideally we would use the `showPath()` of the
++            // "real" accessor for this fetcher type.
+             accessor->setPathDisplay("«" + to_string() + "»");
+ 
+             return {accessor, *this};
+
+From 74af43ee9151fa71345f0dc980527fa2ece14728 Mon Sep 17 00:00:00 2001
+From: Eelco Dolstra <edolstra@gmail.com>
+Date: Fri, 6 Jun 2025 20:03:33 +0200
+Subject: [PATCH 3/3] Remove superfluous semicolon
+
+Co-authored-by: Cole Helbling <cole.e.helbling@outlook.com>
+---
+ src/libfetchers/fetchers.cc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/libfetchers/fetchers.cc b/src/libfetchers/fetchers.cc
+index 9beef69f075..5764f310d40 100644
+--- a/src/libfetchers/fetchers.cc
++++ b/src/libfetchers/fetchers.cc
+@@ -305,7 +305,7 @@ struct SubstitutedSourceAccessor : ForwardingSourceAccessor
+ 
+     std::string showPath(const CanonPath & path) override
+     {
+-        return displayPrefix + path.abs() + displaySuffix;;
++        return displayPrefix + path.abs() + displaySuffix;
+     }
+ };
+ 

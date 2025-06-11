@@ -1,0 +1,21 @@
+From f6c5ae4c1b2e411e6b1e6a8181cc84363d6a7546 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Domen=20Ko=C5=BEar?= <domen@cachix.org>
+Date: Fri, 27 Sep 2024 13:00:21 +0100
+Subject: [PATCH] readDir: log with debug what path is being processed
+
+---
+ src/libexpr/primops.cc | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/libexpr/primops.cc b/src/libexpr/primops.cc
+index ff3ebabafd5..15b59ceb26a 100644
+--- a/src/libexpr/primops.cc
++++ b/src/libexpr/primops.cc
+@@ -1990,6 +1990,7 @@ static RegisterPrimOp primop_readFileType({
+ static void prim_readDir(EvalState & state, const PosIdx pos, Value * * args, Value & v)
+ {
+     auto path = realisePath(state, pos, *args[0]);
++    printTalkative("devenv readDir: '%1%'", path);
+ 
+     // Retrieve directory entries for all nodes in a directory.
+     // This is similar to `getFileType` but is optimized to reduce system calls

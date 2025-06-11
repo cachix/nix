@@ -1,0 +1,21 @@
+From 000a5b7e08e7880e4fe3e1f05f8ed2cd5d8eec63 Mon Sep 17 00:00:00 2001
+From: Sander <hey@sandydoo.me>
+Date: Tue, 10 Dec 2024 03:58:49 +0400
+Subject: [PATCH] getEnv: log with debug which env is being read
+
+---
+ src/libexpr/primops.cc | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/libexpr/primops.cc b/src/libexpr/primops.cc
+index 15b59ceb26a..5375e3a7f2e 100644
+--- a/src/libexpr/primops.cc
++++ b/src/libexpr/primops.cc
+@@ -961,6 +961,7 @@ static RegisterPrimOp primop_tryEval({
+ static void prim_getEnv(EvalState & state, const PosIdx pos, Value * * args, Value & v)
+ {
+     std::string name(state.forceStringNoCtx(*args[0], pos, "while evaluating the first argument passed to builtins.getEnv"));
++    printTalkative("devenv getEnv: '%1%'", name);
+     v.mkString(state.settings.restrictEval || state.settings.pureEval ? "" : getEnv(name).value_or(""));
+ }
+ 

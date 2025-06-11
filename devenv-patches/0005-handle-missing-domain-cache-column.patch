@@ -1,0 +1,39 @@
+From 1e61e9f40673f84c3b02573145492d8af581bec5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Domen=20Ko=C5=BEar?= <domen@dev.si>
+Date: Tue, 10 Sep 2024 15:30:00 +0100
+Subject: [PATCH] handle missing domain colum in fetcher cache
+
+---
+ src/libfetchers/cache.cc | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/src/libfetchers/cache.cc b/src/libfetchers/cache.cc
+index 7019b0325d7..c4e24440221 100644
+--- a/src/libfetchers/cache.cc
++++ b/src/libfetchers/cache.cc
+@@ -41,6 +41,25 @@ struct CacheImpl : Cache
+ 
+         state->db = SQLite(dbPath);
+         state->db.isCache();
++
++        // Check if the 'domain' column exists in the 'Cache' table
++        SQLiteStmt pragmaStmt(state->db, "pragma table_info(Cache)");
++        bool domainColumnExists = false;
++        {
++            auto use(pragmaStmt.use());
++            while (use.next()) {
++                std::string columnName = use.getStr(1);
++                if (columnName == "domain") {
++                    domainColumnExists = true;
++                    break;
++                }
++            }
++        }
++
++        // If 'domain' column does not exist, drop the 'Cache' table
++        if (!domainColumnExists) {
++            state->db.exec("drop table if exists Cache");
++        }
+         state->db.exec(schema);
+ 
+         state->upsert.create(state->db,

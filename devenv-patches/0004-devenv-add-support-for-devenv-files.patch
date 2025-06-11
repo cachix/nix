@@ -1,0 +1,194 @@
+From 228f928bc06a72eba418634bb65ee82a317be95f Mon Sep 17 00:00:00 2001
+From: Sander <hey@sandydoo.me>
+Date: Thu, 12 Jun 2025 00:26:10 +0200
+Subject: [PATCH] devenv: add support for devenv files
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-authored-by: Domen Kožar <domen@cachix.org>
+---
+ src/libfetchers/git-utils.cc            | 33 +++++++++++++++++++++++++
+ src/libflake/call-flake.nix             |  6 ++++-
+ src/libflake/flake.cc                   |  6 +++++
+ src/libflake/flakeref.cc                | 18 +++++++-------
+ src/libflake/include/nix/flake/flake.hh |  2 +-
+ src/nix/package.nix                     |  2 +-
+ 6 files changed, 55 insertions(+), 12 deletions(-)
+
+diff --git a/src/libfetchers/git-utils.cc b/src/libfetchers/git-utils.cc
+index 60d8edee0..9803dcf09 100644
+--- a/src/libfetchers/git-utils.cc
++++ b/src/libfetchers/git-utils.cc
+@@ -35,6 +35,8 @@
+ #include <regex>
+ #include <span>
+ 
++namespace fs = std::filesystem;
++
+ namespace std {
+ 
+ template<> struct hash<git_oid>
+@@ -432,6 +434,8 @@ struct GitRepoImpl : GitRepo, std::enable_shared_from_this<GitRepoImpl>
+ 
+         git_status_options options = GIT_STATUS_OPTIONS_INIT;
+         options.flags |= GIT_STATUS_OPT_INCLUDE_UNMODIFIED;
++        options.flags |= GIT_STATUS_OPT_INCLUDE_UNTRACKED;
++        options.flags |= GIT_STATUS_OPT_RECURSE_UNTRACKED_DIRS;
+         options.flags |= GIT_STATUS_OPT_EXCLUDE_SUBMODULES;
+         if (git_status_foreach_ext(*this, &options, &statusCallbackTrampoline, &statusCallback))
+             throw Error("getting working directory status: %s", git_error_last()->message);
+@@ -441,6 +445,35 @@ struct GitRepoImpl : GitRepo, std::enable_shared_from_this<GitRepoImpl>
+         if (pathExists(modulesFile.string()))
+             info.submodules = parseSubmodules(modulesFile);
+ 
++        fs::path cwd = fs::current_path();
++
++        // Usually ignored, so add it manually
++        if (pathExists(cwd / ".devenv.flake.nix")) {
++            info.files.insert(CanonPath((cwd / ".devenv.flake.nix").string()).removePrefix(CanonPath(path.string())).rel());
++            info.files.insert(CanonPath((cwd / ".devenv/flake.json").string()).removePrefix(CanonPath(path.string())).rel());
++            info.files.insert(CanonPath((cwd / ".devenv/devenv.json").string()).removePrefix(CanonPath(path.string())).rel());
++            // support devenv test
++            for (const auto & entry : fs::directory_iterator(cwd)) {
++                if (entry.path().filename().string().find(".devenv.") == 0 && fs::is_directory(entry.path())) {
++                    // add flake.json and devenv.json
++                    info.files.insert(CanonPath((cwd / entry.path() / "flake.json").string()).removePrefix(CanonPath(path.string())).rel());
++                    info.files.insert(CanonPath((cwd / entry.path() / "devenv.json").string()).removePrefix(CanonPath(path.string())).rel());
++                }
++            }
++        }
++        if (pathExists(cwd / "devenv.local.nix")) {
++            info.files.insert(CanonPath((cwd / "devenv.local.nix").string()).removePrefix(CanonPath(path.string())).rel());
++        }
++        if (pathExists(cwd / "devenv.nix")) {
++            info.files.insert(CanonPath((cwd / "devenv.nix").string()).removePrefix(CanonPath(path.string())).rel());
++        }
++        // find all files that begin with .env
++        for (const auto & entry : fs::directory_iterator(cwd)) {
++            if (entry.path().filename().string().find(".env") == 0) {
++                info.files.insert(CanonPath((cwd / entry.path()).string()).removePrefix(CanonPath(path.string())).rel());
++            }
++        }
++
+         return info;
+     }
+ 
+diff --git a/src/libflake/call-flake.nix b/src/libflake/call-flake.nix
+index ed7947e06..95373d0dc 100644
+--- a/src/libflake/call-flake.nix
++++ b/src/libflake/call-flake.nix
+@@ -62,7 +62,11 @@ let
+         else
+           sourceInfo.outPath + (if subdir == "" then "" else "/" + subdir);
+ 
+-      flake = import (outPath + "/flake.nix");
++      file = if builtins.pathExists (outPath + "/.devenv.flake.nix")
++             then "/.devenv.flake.nix"
++             else "/flake.nix";
++
++      flake = import (outPath + file);
+ 
+       inputs = mapAttrs (inputName: inputSpec: allNodes.${resolveInput inputSpec}.result) (
+         node.inputs or { }
+diff --git a/src/libflake/flake.cc b/src/libflake/flake.cc
+index 8ec094cc3..c3814a479 100644
+--- a/src/libflake/flake.cc
++++ b/src/libflake/flake.cc
+@@ -206,6 +206,12 @@ static Flake readFlake(
+ {
+     auto flakeDir = rootDir / CanonPath(resolvedRef.subdir);
+     auto flakePath = flakeDir / "flake.nix";
++    auto devEnvPath = flakeDir / ".devenv.flake.nix";
++    if (devEnvPath.pathExists()) {
++      flakePath = devEnvPath;
++    } else if (!flakePath.pathExists()) {
++      throw Error("'%s' does not exist", devEnvPath);
++    }
+ 
+     // NOTE evalFile forces vInfo to be an attrset because mustBeTrivial is true.
+     Value vInfo;
+diff --git a/src/libflake/flakeref.cc b/src/libflake/flakeref.cc
+index 12bddf578..9152685a2 100644
+--- a/src/libflake/flakeref.cc
++++ b/src/libflake/flakeref.cc
+@@ -112,10 +112,10 @@ std::pair<FlakeRef, std::string> parsePathFlakeRefWithFragment(
+         if (isFlake) {
+ 
+             if (!S_ISDIR(lstat(path).st_mode)) {
+-                if (baseNameOf(path) == "flake.nix") {
++                if (baseNameOf(path) == ".devenv.flake.nix") {
+                     // Be gentle with people who accidentally write `/foo/bar/flake.nix` instead of `/foo/bar`
+                     warn(
+-                        "Path '%s' should point at the directory containing the 'flake.nix' file, not the file itself. "
++                        "Path '%s' should point at the directory containing the 'devenv.nix' file, not the file itself. "
+                         "Pretending that you meant '%s'"
+                         , path, dirOf(path));
+                     path = dirOf(path);
+@@ -124,18 +124,18 @@ std::pair<FlakeRef, std::string> parsePathFlakeRefWithFragment(
+                 }
+             }
+ 
+-            if (!allowMissing && !pathExists(path + "/flake.nix")){
+-                notice("path '%s' does not contain a 'flake.nix', searching up",path);
++            if (!allowMissing && !pathExists(path + "/.devenv.flake.nix")){
++                notice("path '%s' does not contain a 'devenv.flake.nix', searching up",path);
+ 
+                 // Save device to detect filesystem boundary
+                 dev_t device = lstat(path).st_dev;
+                 bool found = false;
+                 while (path != "/") {
+-                    if (pathExists(path + "/flake.nix")) {
++                    if (pathExists(path + "/.devenv.flake.nix")) {
+                         found = true;
+                         break;
+                     } else if (pathExists(path + "/.git"))
+-                        throw Error("path '%s' is not part of a flake (neither it nor its parent directories contain a 'flake.nix' file)", path);
++                        throw Error("path '%s' is not part of a flake (neither it nor its parent directories contain a '.devenv.flake.nix' file)", path);
+                     else {
+                         if (lstat(path).st_dev != device)
+                             throw Error("unable to find a flake before encountering filesystem boundary at '%s'", path);
+@@ -143,11 +143,11 @@ std::pair<FlakeRef, std::string> parsePathFlakeRefWithFragment(
+                     path = dirOf(path);
+                 }
+                 if (!found)
+-                    throw BadURL("could not find a flake.nix file");
++                    throw BadURL("could not find a .devenv.flake.nix file");
+             }
+ 
+-            if (!allowMissing && !pathExists(path + "/flake.nix"))
+-                throw BadURL("path '%s' is not a flake (because it doesn't contain a 'flake.nix' file)", path);
++            if (!allowMissing && !pathExists(path + "/.devenv.flake.nix"))
++                throw BadURL("path '%s' is not a flake (because it doesn't contain a '.devenv.flake.nix' file)", path);
+ 
+             auto flakeRoot = path;
+             std::string subdir;
+diff --git a/src/libflake/include/nix/flake/flake.hh b/src/libflake/include/nix/flake/flake.hh
+index 50fd826af..ea07de151 100644
+--- a/src/libflake/include/nix/flake/flake.hh
++++ b/src/libflake/include/nix/flake/flake.hh
+@@ -111,7 +111,7 @@ struct Flake
+ 
+     SourcePath lockFilePath()
+     {
+-        return path.parent() / "flake.lock";
++        return path.parent() / "devenv.lock";
+     }
+ };
+ 
+diff --git a/src/nix/package.nix b/src/nix/package.nix
+index 3d4f6f40b..f8ddcc994 100644
+--- a/src/nix/package.nix
++++ b/src/nix/package.nix
+@@ -18,7 +18,7 @@ let
+ in
+ 
+ mkMesonExecutable (finalAttrs: {
+-  pname = "nix";
++  pname = "nix-devenv";
+   inherit version;
+ 
+   workDir = ./.;
+-- 
+2.49.0
+

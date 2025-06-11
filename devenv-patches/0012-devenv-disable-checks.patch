@@ -1,0 +1,25 @@
+From 1a6c16160c9efcf93d01073cee2007468dc60a71 Mon Sep 17 00:00:00 2001
+From: Sander <hey@sandydoo.me>
+Date: Thu, 12 Jun 2025 01:09:39 +0200
+Subject: [PATCH] devenv: disable checks
+
+---
+ src/nix/package.nix | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/nix/package.nix b/src/nix/package.nix
+index f8ddcc994..7f708399a 100644
+--- a/src/nix/package.nix
++++ b/src/nix/package.nix
+@@ -95,6 +95,8 @@ mkMesonExecutable (finalAttrs: {
+   mesonFlags = [
+   ];
+ 
++  doCheck = false;
++
+   postInstall = lib.optionalString stdenv.hostPlatform.isStatic ''
+     mkdir -p $out/nix-support
+     echo "file binary-dist $out/bin/nix" >> $out/nix-support/hydra-build-products
+-- 
+2.49.0
+

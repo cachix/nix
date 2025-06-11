@@ -1,0 +1,24 @@
+From ed1280d4dae49945f6d39d43a75e1b74133cb219 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Domen=20Ko=C5=BEar?= <domen@cachix.org>
+Date: Fri, 27 Sep 2024 12:48:18 +0100
+Subject: [PATCH] readFile: log debug which file is being read
+
+---
+ src/libexpr/primops.cc | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/libexpr/primops.cc b/src/libexpr/primops.cc
+index bd79d08ac..ff3ebabaf 100644
+--- a/src/libexpr/primops.cc
++++ b/src/libexpr/primops.cc
+@@ -1805,6 +1805,7 @@ static RegisterPrimOp primop_dirOf({
+ static void prim_readFile(EvalState & state, const PosIdx pos, Value * * args, Value & v)
+ {
+     auto path = realisePath(state, pos, *args[0]);
++    printTalkative("devenv readFile: '%1%'", path);
+     auto s = path.readFile();
+     if (s.find((char) 0) != std::string::npos)
+         state.error<EvalError>(
+-- 
+2.49.0
+

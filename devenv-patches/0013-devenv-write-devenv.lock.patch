@@ -1,0 +1,34 @@
+From d663896ec4da97689dcf7f609b47af302d53df8d Mon Sep 17 00:00:00 2001
+From: Sander <hey@sandydoo.me>
+Date: Thu, 12 Jun 2025 05:04:37 +0200
+Subject: [PATCH] devenv: write devenv.lock
+
+---
+ src/libflake/flake.cc | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/libflake/flake.cc b/src/libflake/flake.cc
+index e8b43db8b..323e2a889 100644
+--- a/src/libflake/flake.cc
++++ b/src/libflake/flake.cc
+@@ -798,7 +798,7 @@ LockedFlake lockFlake(
+                                 throw Error("'--commit-lock-file' and '--output-lock-file' are incompatible");
+                             writeFile(*lockFlags.outputLockFilePath, newLockFileS);
+                         } else {
+-                            auto relPath = (topRef.subdir == "" ? "" : topRef.subdir + "/") + "flake.lock";
++                            auto relPath = (topRef.subdir == "" ? "" : topRef.subdir + "/") + "devenv.lock";
+                             auto outputLockFilePath = *sourcePath / relPath;
+ 
+                             bool lockFileExists = pathExists(outputLockFilePath);
+@@ -829,7 +829,7 @@ LockedFlake lockFlake(
+                             }
+ 
+                             topRef.input.putFile(
+-                                CanonPath((topRef.subdir == "" ? "" : topRef.subdir + "/") + "flake.lock"),
++                                CanonPath((topRef.subdir == "" ? "" : topRef.subdir + "/") + "devenv.lock"),
+                                 newLockFileS, commitMessage);
+                         }
+ 
+-- 
+2.49.0
+

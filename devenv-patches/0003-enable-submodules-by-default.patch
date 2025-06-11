@@ -1,0 +1,22 @@
+From d69986bdb2773ef56b307270918254d1f0d03285 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Domen=20Ko=C5=BEar?= <domen@dev.si>
+Date: Sat, 9 Mar 2024 05:47:21 +0000
+Subject: [PATCH] DEVENV: enable git submodules by default
+
+---
+ src/libexpr/primops/fetchTree.cc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/libexpr/primops/fetchTree.cc b/src/libexpr/primops/fetchTree.cc
+index e86b934d13d..8cd1a364d0f 100644
+--- a/src/libexpr/primops/fetchTree.cc
++++ b/src/libexpr/primops/fetchTree.cc
+@@ -36,7 +36,7 @@ static void emitTreeAttrs(
+ 
+     if (input.getType() == "git")
+         attrs.alloc("submodules").mkBool(
+-            fetchers::maybeGetBoolAttr(input.attrs, "submodules").value_or(false));
++            fetchers::maybeGetBoolAttr(input.attrs, "submodules").value_or(true));
+ 
+     if (!forceDirty) {
+ 

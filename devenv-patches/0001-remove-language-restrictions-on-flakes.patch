@@ -1,0 +1,23 @@
+From efd0fe17cd829f351d828c85c75dce7448577e48 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Domen=20Ko=C5=BEar?= <domen@dev.si>
+Date: Wed, 26 Oct 2022 10:55:14 +0100
+Subject: [PATCH] DEVENV: remove language restrictions on flakes
+
+---
+ src/libflake/flake.cc | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/src/libflake/flake.cc b/src/libflake/flake/flake.cc
+index 4136e6f406b..e7eb15b63f3 100644
+--- a/src/libflake/flake.cc
++++ b/src/libflake/flake.cc
+@@ -22,8 +22,7 @@ namespace flake {
+ 
+ static void forceTrivialValue(EvalState & state, Value & value, const PosIdx pos)
+ {
+-    if (value.isThunk() && value.isTrivial())
+-        state.forceValue(value, pos);
++    state.forceValue(value, pos);
+ }
+ 
+ static void expectType(EvalState & state, ValueType type,

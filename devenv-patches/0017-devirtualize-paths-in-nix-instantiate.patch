@@ -1,0 +1,100 @@
+From 7bafc99f200064b4efec56cc6112c23feff59f40 Mon Sep 17 00:00:00 2001
+From: Eelco Dolstra <edolstra@gmail.com>
+Date: Wed, 11 Jun 2025 16:34:36 +0200
+Subject: [PATCH 1/3] Run nixpkgsLibTests in lazy trees mode
+
+---
+ packaging/hydra.nix | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/packaging/hydra.nix b/packaging/hydra.nix
+index 664ee18caef..6df8782393d 100644
+--- a/packaging/hydra.nix
++++ b/packaging/hydra.nix
+@@ -187,6 +187,19 @@ in
+           pkgs = nixpkgsFor.${system}.native;
+         }
+       );
++
++      nixpkgsLibTestsLazy = forAllSystems (
++        system:
++        lib.overrideDerivation
++          (import (nixpkgs + "/lib/tests/test-with-nix.nix") {
++            lib = nixpkgsFor.${system}.native.lib;
++            nix = self.packages.${system}.nix-cli;
++            pkgs = nixpkgsFor.${system}.native;
++          })
++          (_: {
++            "NIX_CONFIG" = "lazy-trees = true";
++          })
++      );
+     };
+ 
+   metrics.nixpkgs = import "${nixpkgs-regression}/pkgs/top-level/metrics.nix" {
+
+From df7a2a1bed5af129f6f192bf30cdfdd022c62f1c Mon Sep 17 00:00:00 2001
+From: Eelco Dolstra <edolstra@gmail.com>
+Date: Wed, 11 Jun 2025 17:14:33 +0200
+Subject: [PATCH 2/3] nix-instantiate --eval --json: Devirtualize the output
+
+---
+ src/nix-instantiate/nix-instantiate.cc | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/nix-instantiate/nix-instantiate.cc b/src/nix-instantiate/nix-instantiate.cc
+index 89a8505bb79..6f386a5d8d1 100644
+--- a/src/nix-instantiate/nix-instantiate.cc
++++ b/src/nix-instantiate/nix-instantiate.cc
+@@ -17,6 +17,7 @@
+ #include <map>
+ #include <iostream>
+ 
++#include <nlohmann/json.hpp>
+ 
+ using namespace nix;
+ 
+@@ -61,8 +62,8 @@ void processExpr(EvalState & state, const Strings & attrPaths,
+             else if (output == okXML)
+                 printValueAsXML(state, strict, location, vRes, std::cout, context, noPos);
+             else if (output == okJSON) {
+-                printValueAsJSON(state, strict, vRes, v.determinePos(noPos), std::cout, context);
+-                std::cout << std::endl;
++                auto j = printValueAsJSON(state, strict, vRes, v.determinePos(noPos), context);
++                std::cout << state.devirtualize(j.dump(), context) << std::endl;
+             } else {
+                 if (strict) state.forceValueDeep(vRes);
+                 std::set<const void *> seen;
+
+From 31e58dcb92b944a54a834d9b85a573a78b19acc5 Mon Sep 17 00:00:00 2001
+From: Eelco Dolstra <edolstra@gmail.com>
+Date: Wed, 11 Jun 2025 17:18:42 +0200
+Subject: [PATCH 3/3] nix-instantiate --eval --xml: Devirtualize the output
+
+---
+ src/nix-instantiate/nix-instantiate.cc | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/src/nix-instantiate/nix-instantiate.cc b/src/nix-instantiate/nix-instantiate.cc
+index 6f386a5d8d1..f327454ec91 100644
+--- a/src/nix-instantiate/nix-instantiate.cc
++++ b/src/nix-instantiate/nix-instantiate.cc
+@@ -59,12 +59,16 @@ void processExpr(EvalState & state, const Strings & attrPaths,
+                         context);
+                 // We intentionally don't output a newline here. The default PS1 for Bash in NixOS starts with a newline
+                 // and other interactive shells like Zsh are smart enough to print a missing newline before the prompt.
+-            else if (output == okXML)
+-                printValueAsXML(state, strict, location, vRes, std::cout, context, noPos);
++            else if (output == okXML) {
++                std::ostringstream s;
++                printValueAsXML(state, strict, location, vRes, s, context, noPos);
++                std::cout << state.devirtualize(s.str(), context);
++            }
+             else if (output == okJSON) {
+                 auto j = printValueAsJSON(state, strict, vRes, v.determinePos(noPos), context);
+                 std::cout << state.devirtualize(j.dump(), context) << std::endl;
+-            } else {
++            }
++            else {
+                 if (strict) state.forceValueDeep(vRes);
+                 std::set<const void *> seen;
+                 printAmbiguous(state, vRes, std::cout, &seen, std::numeric_limits<int>::max());

@@ -1,0 +1,296 @@
+From b631a89d3a2ce9b563f285747519205a9618544c Mon Sep 17 00:00:00 2001
+From: Eelco Dolstra <edolstra@gmail.com>
+Date: Wed, 11 Jun 2025 22:23:28 +0200
+Subject: [PATCH 1/6] Run the Nix test suite with lazy trees enabled
+
+---
+ flake.nix                       | 6 ++++++
+ tests/functional/common/init.sh | 1 +
+ tests/functional/package.nix    | 5 +++++
+ 3 files changed, 12 insertions(+)
+
+diff --git a/flake.nix b/flake.nix
+index a8759d042..e7838628d 100644
+--- a/flake.nix
++++ b/flake.nix
+@@ -228,6 +228,12 @@
+             '';
+           repl-completion = nixpkgsFor.${system}.native.callPackage ./tests/repl-completion.nix { };
+ 
++          lazyTrees =
++            nixpkgsFor.${system}.native.nixComponents2.nix-functional-tests.override {
++              pname = "nix-lazy-trees-tests";
++              lazyTrees = true;
++            };
++
+           /**
+             Checks for our packaging expressions.
+             This shouldn't build anything significant; just check that things
+diff --git a/tests/functional/common/init.sh b/tests/functional/common/init.sh
+index 66b44c76f..e9641e9b1 100755
+--- a/tests/functional/common/init.sh
++++ b/tests/functional/common/init.sh
+@@ -54,6 +54,7 @@ flake-registry = $TEST_ROOT/registry.json
+ show-trace = true
+ include nix.conf.extra
+ trusted-users = $(whoami)
++${_NIX_TEST_EXTRA_CONFIG:-}
+ EOF
+ 
+ cat > "$NIX_CONF_DIR"/nix.conf.extra <<EOF
+diff --git a/tests/functional/package.nix b/tests/functional/package.nix
+index 43f2f25a2..3185cdf9a 100644
+--- a/tests/functional/package.nix
++++ b/tests/functional/package.nix
+@@ -26,6 +26,9 @@
+ 
+   # For running the functional tests against a different pre-built Nix.
+   test-daemon ? null,
++
++  # Whether to run tests with lazy trees enabled.
++  lazyTrees ? false
+ }:
+ 
+ let
+@@ -95,6 +98,8 @@ mkMesonDerivation (
+       mkdir $out
+     '';
+ 
++    _NIX_TEST_EXTRA_CONFIG = lib.optionalString lazyTrees "lazy-trees = true";
++
+     meta = {
+       platforms = lib.platforms.unix;
+     };
+-- 
+2.49.0
+
+
+From b0b0d8494fc078a9133f9cadd6970343db2321e1 Mon Sep 17 00:00:00 2001
+From: Eelco Dolstra <edolstra@gmail.com>
+Date: Wed, 11 Jun 2025 22:30:57 +0200
+Subject: [PATCH 2/6] Fix flakes test with lazy trees enabled
+
+---
+ tests/functional/flakes/flakes.sh | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/tests/functional/flakes/flakes.sh b/tests/functional/flakes/flakes.sh
+index 0a52ba08c..e335fe6f3 100755
+--- a/tests/functional/flakes/flakes.sh
++++ b/tests/functional/flakes/flakes.sh
+@@ -69,7 +69,9 @@ nix flake metadata "$flake1Dir" | grepQuiet 'URL:.*flake1.*'
+ # Test 'nix flake metadata --json'.
+ json=$(nix flake metadata flake1 --json | jq .)
+ [[ $(echo "$json" | jq -r .description) = 'Bla bla' ]]
+-[[ -d $(echo "$json" | jq -r .path) ]]
++if [[ $(nix config show lazy-trees) = false ]]; then
++    [[ -d $(echo "$json" | jq -r .path) ]]
++fi
+ [[ $(echo "$json" | jq -r .lastModified) = $(git -C "$flake1Dir" log -n1 --format=%ct) ]]
+ hash1=$(echo "$json" | jq -r .revision)
+ [[ -n $(echo "$json" | jq -r .fingerprint) ]]
+@@ -161,7 +163,11 @@ expect 1 nix build -o "$TEST_ROOT/result" "$flake2Dir#bar" --no-update-lock-file
+ nix build -o "$TEST_ROOT/result" "$flake2Dir#bar" --commit-lock-file
+ [[ -e "$flake2Dir/flake.lock" ]]
+ [[ -z $(git -C "$flake2Dir" diff main || echo failed) ]]
+-[[ $(jq --indent 0 . < "$flake2Dir/flake.lock") =~ ^'{"nodes":{"flake1":{"locked":{"lastModified":'.*',"narHash":"sha256-'.*'","ref":"refs/heads/master","rev":"'.*'","revCount":2,"type":"git","url":"file:///'.*'"},"original":{"id":"flake1","type":"indirect"}},"root":{"inputs":{"flake1":"flake1"}}},"root":"root","version":7}'$ ]]
++if [[ $(nix config show lazy-trees) = false ]]; then
++    [[ $(jq --indent 0 . < "$flake2Dir/flake.lock") =~ ^'{"nodes":{"flake1":{"locked":{"lastModified":'.*',"narHash":"sha256-'.*'","ref":"refs/heads/master","rev":"'.*'","revCount":2,"type":"git","url":"file:///'.*'"},"original":{"id":"flake1","type":"indirect"}},"root":{"inputs":{"flake1":"flake1"}}},"root":"root","version":7}'$ ]]
++else
++    [[ $(jq --indent 0 . < "$flake2Dir/flake.lock") =~ ^'{"nodes":{"flake1":{"locked":{"lastModified":'.*',"ref":"refs/heads/master","rev":"'.*'","revCount":2,"type":"git","url":"file:///'.*'"},"original":{"id":"flake1","type":"indirect"}},"root":{"inputs":{"flake1":"flake1"}}},"root":"root","version":7}'$ ]]
++fi
+ 
+ # Rerunning the build should not change the lockfile.
+ nix build -o "$TEST_ROOT/result" "$flake2Dir#bar"
+-- 
+2.49.0
+
+
+From 8f9b84e6b61e5decacce6c9f0af566d8b072166e Mon Sep 17 00:00:00 2001
+From: Eelco Dolstra <edolstra@gmail.com>
+Date: Thu, 12 Jun 2025 15:54:34 +0200
+Subject: [PATCH 3/6] Git fetcher: Do not consider a null revision (i.e.
+ workdir) to be locked
+
+---
+ src/libfetchers/git.cc | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/libfetchers/git.cc b/src/libfetchers/git.cc
+index 95bac44aa..9de249394 100644
+--- a/src/libfetchers/git.cc
++++ b/src/libfetchers/git.cc
+@@ -882,7 +882,8 @@ struct GitInputScheme : InputScheme
+ 
+     bool isLocked(const Input & input) const override
+     {
+-        return (bool) input.getRev();
++        auto rev = input.getRev();
++        return rev && rev != nullRev;
+     }
+ };
+ 
+-- 
+2.49.0
+
+
+From 94c95cfbd7d5d3bc6f7aa610f400315ac14e02aa Mon Sep 17 00:00:00 2001
+From: Eelco Dolstra <edolstra@gmail.com>
+Date: Thu, 12 Jun 2025 16:00:29 +0200
+Subject: [PATCH 4/6] Fix NAR hash checking for fetchGit with lazy tees
+
+If a NAR hash is specified, we should probably check
+it. Unfortunately, for now this has the side effect of forcing NAR
+hash checking of any input that has a NAR hash.
+---
+ src/libexpr/paths.cc | 34 +++++++++++++++++++---------------
+ 1 file changed, 19 insertions(+), 15 deletions(-)
+
+diff --git a/src/libexpr/paths.cc b/src/libexpr/paths.cc
+index 2bab3361c..e39861f3f 100644
+--- a/src/libexpr/paths.cc
++++ b/src/libexpr/paths.cc
+@@ -76,24 +76,28 @@ StorePath EvalState::mountInput(
+ 
+     allowPath(storePath); // FIXME: should just whitelist the entire virtual store
+ 
++    std::optional<Hash> _narHash;
++
++    auto getNarHash = [&]()
++    {
++        if (!_narHash)
++            // FIXME: use fetchToStore to make it cache this
++            _narHash = accessor->hashPath(CanonPath::root);
++        return _narHash;
++    };
++
+     storeFS->mount(CanonPath(store->printStorePath(storePath)), accessor);
+ 
+-    if (requireLockable && (!settings.lazyTrees || !input.isLocked()) && !input.getNarHash()) {
+-        auto narHash = accessor->hashPath(CanonPath::root);
+-        input.attrs.insert_or_assign("narHash", narHash.to_string(HashFormat::SRI, true));
+-    }
++    if (requireLockable && (!settings.lazyTrees || !input.isLocked()) && !input.getNarHash())
++        input.attrs.insert_or_assign("narHash", getNarHash()->to_string(HashFormat::SRI, true));
+ 
+-    // FIXME: what to do with the NAR hash in lazy mode?
+-    if (!settings.lazyTrees && originalInput.getNarHash()) {
+-        auto expected = originalInput.computeStorePath(*store);
+-        if (storePath != expected)
+-            throw Error(
+-                (unsigned int) 102,
+-                "NAR hash mismatch in input '%s', expected '%s' but got '%s'",
+-                originalInput.to_string(),
+-                store->printStorePath(storePath),
+-                store->printStorePath(expected));
+-    }
++    if (originalInput.getNarHash() && *getNarHash() != *originalInput.getNarHash())
++        throw Error(
++            (unsigned int) 102,
++            "NAR hash mismatch in input '%s', expected '%s' but got '%s'",
++            originalInput.to_string(),
++            getNarHash()->to_string(HashFormat::SRI, true),
++            originalInput.getNarHash()->to_string(HashFormat::SRI, true));
+ 
+     return storePath;
+ }
+-- 
+2.49.0
+
+
+From 4ad2361a1b213189c2a41a4db5225b227fef6af6 Mon Sep 17 00:00:00 2001
+From: Eelco Dolstra <edolstra@gmail.com>
+Date: Thu, 12 Jun 2025 16:11:54 +0200
+Subject: [PATCH 5/6] mountInput(): Optimize getting the NAR hash for real
+ store paths
+
+---
+ src/libexpr/paths.cc | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/src/libexpr/paths.cc b/src/libexpr/paths.cc
+index e39861f3f..de7de21e3 100644
+--- a/src/libexpr/paths.cc
++++ b/src/libexpr/paths.cc
+@@ -80,9 +80,13 @@ StorePath EvalState::mountInput(
+ 
+     auto getNarHash = [&]()
+     {
+-        if (!_narHash)
+-            // FIXME: use fetchToStore to make it cache this
+-            _narHash = accessor->hashPath(CanonPath::root);
++        if (!_narHash) {
++            if (store->isValidPath(storePath))
++                _narHash = store->queryPathInfo(storePath)->narHash;
++            else
++                // FIXME: use fetchToStore to make it cache this
++                _narHash = accessor->hashPath(CanonPath::root);
++        }
+         return _narHash;
+     };
+ 
+-- 
+2.49.0
+
+
+From cbb658312946111a2d83e856a71262d4369ce70e Mon Sep 17 00:00:00 2001
+From: Eelco Dolstra <edolstra@gmail.com>
+Date: Thu, 12 Jun 2025 16:13:28 +0200
+Subject: [PATCH 6/6] Formatting
+
+---
+ flake.nix                    | 9 ++++-----
+ src/libexpr/paths.cc         | 3 +--
+ tests/functional/package.nix | 2 +-
+ 3 files changed, 6 insertions(+), 8 deletions(-)
+
+diff --git a/flake.nix b/flake.nix
+index e7838628d..1fac8d8d0 100644
+--- a/flake.nix
++++ b/flake.nix
+@@ -228,11 +228,10 @@
+             '';
+           repl-completion = nixpkgsFor.${system}.native.callPackage ./tests/repl-completion.nix { };
+ 
+-          lazyTrees =
+-            nixpkgsFor.${system}.native.nixComponents2.nix-functional-tests.override {
+-              pname = "nix-lazy-trees-tests";
+-              lazyTrees = true;
+-            };
++          lazyTrees = nixpkgsFor.${system}.native.nixComponents2.nix-functional-tests.override {
++            pname = "nix-lazy-trees-tests";
++            lazyTrees = true;
++          };
+ 
+           /**
+             Checks for our packaging expressions.
+diff --git a/src/libexpr/paths.cc b/src/libexpr/paths.cc
+index de7de21e3..ae42423bd 100644
+--- a/src/libexpr/paths.cc
++++ b/src/libexpr/paths.cc
+@@ -78,8 +78,7 @@ StorePath EvalState::mountInput(
+ 
+     std::optional<Hash> _narHash;
+ 
+-    auto getNarHash = [&]()
+-    {
++    auto getNarHash = [&]() {
+         if (!_narHash) {
+             if (store->isValidPath(storePath))
+                 _narHash = store->queryPathInfo(storePath)->narHash;
+diff --git a/tests/functional/package.nix b/tests/functional/package.nix
+index 3185cdf9a..799026ebe 100644
+--- a/tests/functional/package.nix
++++ b/tests/functional/package.nix
+@@ -28,7 +28,7 @@
+   test-daemon ? null,
+ 
+   # Whether to run tests with lazy trees enabled.
+-  lazyTrees ? false
++  lazyTrees ? false,
+ }:
+ 
+ let
+-- 
+2.49.0
+

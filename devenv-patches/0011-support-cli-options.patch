@@ -1,0 +1,52 @@
+From 0db3ef58abb805eb363b846d9795e5a05b413c23 Mon Sep 17 00:00:00 2001
+From: Sander <hey@sandydoo.me>
+Date: Thu, 24 Apr 2025 00:53:31 +0400
+Subject: [PATCH 1/2] pass cli-options.nix through the git sandbox
+
+---
+ src/libfetchers/git-utils.cc | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/libfetchers/git-utils.cc b/src/libfetchers/git-utils.cc
+index 00b255adf12..e1bfd403c0a 100644
+--- a/src/libfetchers/git-utils.cc
++++ b/src/libfetchers/git-utils.cc
+@@ -295,13 +295,14 @@ struct GitRepoImpl : GitRepo, std::enable_shared_from_this<GitRepoImpl>
+ 
+         // Usually ignored, so add it manually
+         if (pathExists(cwd / ".devenv.flake.nix")) {
++            info.files.insert(CanonPath((cwd / ".devenv/cli-options.nix").string()).removePrefix(CanonPath(path.string())).rel());
+             info.files.insert(CanonPath((cwd / ".devenv.flake.nix").string()).removePrefix(CanonPath(path.string())).rel());
+             info.files.insert(CanonPath((cwd / ".devenv/flake.json").string()).removePrefix(CanonPath(path.string())).rel());
+-            info.files.insert(CanonPath((cwd / ".devenv/devenv.json").string()).removePrefix(CanonPath(path.string())).rel());
+             // support devenv test
+             for (const auto & entry : fs::directory_iterator(cwd)) {
+                 if (entry.path().filename().string().find(".devenv.") == 0 && fs::is_directory(entry.path())) {
+-                    // add flake.json and devenv.json
++                    // add flake.json, devenv.json and cli-options.nix
++                    info.files.insert(CanonPath((cwd / entry.path() / "cli-options.nix").string()).removePrefix(CanonPath(path.string())).rel());
+                     info.files.insert(CanonPath((cwd / entry.path() / "flake.json").string()).removePrefix(CanonPath(path.string())).rel());
+                     info.files.insert(CanonPath((cwd / entry.path() / "devenv.json").string()).removePrefix(CanonPath(path.string())).rel());
+                 }
+
+From b455edf3505f1bf0172b39a735caef94687d0d9c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Domen=20Ko=C5=BEar?= <domen@cachix.org>
+Date: Tue, 29 Apr 2025 13:34:31 +0100
+Subject: [PATCH 2/2] partially revert previous commit
+
+---
+ src/libfetchers/git-utils.cc | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/libfetchers/git-utils.cc b/src/libfetchers/git-utils.cc
+index e1bfd403c0a..5434c57832e 100644
+--- a/src/libfetchers/git-utils.cc
++++ b/src/libfetchers/git-utils.cc
+@@ -298,6 +298,7 @@ struct GitRepoImpl : GitRepo, std::enable_shared_from_this<GitRepoImpl>
+             info.files.insert(CanonPath((cwd / ".devenv/cli-options.nix").string()).removePrefix(CanonPath(path.string())).rel());
+             info.files.insert(CanonPath((cwd / ".devenv.flake.nix").string()).removePrefix(CanonPath(path.string())).rel());
+             info.files.insert(CanonPath((cwd / ".devenv/flake.json").string()).removePrefix(CanonPath(path.string())).rel());
++	    info.files.insert(CanonPath((cwd / ".devenv/devenv.json").string()).removePrefix(CanonPath(path.string())).rel());
+             // support devenv test
+             for (const auto & entry : fs::directory_iterator(cwd)) {
+                 if (entry.path().filename().string().find(".devenv.") == 0 && fs::is_directory(entry.path())) {

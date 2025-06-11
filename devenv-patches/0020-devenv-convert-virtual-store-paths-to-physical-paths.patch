@@ -1,0 +1,61 @@
+From 50362a5f36bb05df682018377237555a8b3f7f31 Mon Sep 17 00:00:00 2001
+From: Sander <hey@sandydoo.me>
+Date: Wed, 25 Jun 2025 18:05:23 +0200
+Subject: [PATCH] devenv: convert virtual store paths to physical paths
+
+---
+ src/libexpr/eval.cc    | 3 ++-
+ src/libexpr/primops.cc | 9 ++++++---
+ 2 files changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/src/libexpr/eval.cc b/src/libexpr/eval.cc
+index 399a05a88..5d3e1e376 100644
+--- a/src/libexpr/eval.cc
++++ b/src/libexpr/eval.cc
+@@ -1123,7 +1123,8 @@ void EvalState::evalFile(const SourcePath & path, Value & v, bool mustBeTrivial)
+         return;
+     }
+ 
+-    printTalkative("evaluating file '%1%'", resolvedPath);
++    auto physicalPath = resolvedPath.getPhysicalPath();
++    printTalkative("evaluating file '%1%'", physicalPath ? physicalPath->string() : resolvedPath.to_string());
+     Expr * e = nullptr;
+ 
+     auto j = fileParseCache.find(resolvedPath);
+diff --git a/src/libexpr/primops.cc b/src/libexpr/primops.cc
+index 046f7073a..6b8b96d4c 100644
+--- a/src/libexpr/primops.cc
++++ b/src/libexpr/primops.cc
+@@ -1767,7 +1767,8 @@ static void prim_pathExists(EvalState & state, const PosIdx pos, Value * * args,
+             mustBeDir ? SymlinkResolution::Full : SymlinkResolution::Ancestors;
+         auto path = realisePath(state, pos, arg, symlinkResolution);
+ 
+-        printTalkative("devenv pathExists: '%1%'", path);
++        auto physicalPath = path.getPhysicalPath();
++        printTalkative("devenv pathExists: '%1%'", physicalPath ? physicalPath->string() : path.to_string());
+ 
+         auto st = path.maybeLstat();
+         auto exists = st && (!mustBeDir || st->type == SourceAccessor::tDirectory);
+@@ -1869,7 +1870,8 @@ static RegisterPrimOp primop_dirOf({
+ static void prim_readFile(EvalState & state, const PosIdx pos, Value * * args, Value & v)
+ {
+     auto path = realisePath(state, pos, *args[0]);
+-    printTalkative("devenv readFile: '%1%'", path);
++    auto physicalPath = path.getPhysicalPath();
++    printTalkative("devenv readFile: '%1%'", physicalPath ? physicalPath->string() : path.to_string());
+     auto s = path.readFile();
+     if (s.find((char) 0) != std::string::npos)
+         state.error<EvalError>(
+@@ -2138,7 +2140,8 @@ static RegisterPrimOp primop_readFileType({
+ static void prim_readDir(EvalState & state, const PosIdx pos, Value * * args, Value & v)
+ {
+     auto path = realisePath(state, pos, *args[0]);
+-    printTalkative("devenv readDir: '%1%'", path);
++    auto physicalPath = path.getPhysicalPath();
++    printTalkative("devenv readDir: '%1%'", physicalPath ? physicalPath->string() : path.to_string());
+ 
+     // Retrieve directory entries for all nodes in a directory.
+     // This is similar to `getFileType` but is optimized to reduce system calls
+-- 
+2.49.0
+

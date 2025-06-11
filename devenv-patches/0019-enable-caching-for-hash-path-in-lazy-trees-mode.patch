@@ -1,0 +1,514 @@
+From 1b0f349828a650b4530fb74a08b9a7e4f6099423 Mon Sep 17 00:00:00 2001
+From: Eelco Dolstra <edolstra@gmail.com>
+Date: Fri, 13 Jun 2025 22:19:53 +0200
+Subject: [PATCH 1/4] fetchToStore() cache: Use content hashes instead of store
+ paths
+
+We can always compute the store path from the content hash, but not
+vice versa. Storing the content hash allows `hashPath()` to be
+replaced by `fetchToStore(...FetchMode::DryRun...)`, which gets us
+caching in lazy-trees mode.
+---
+ src/libexpr/paths.cc                          |  3 +-
+ src/libfetchers/fetch-to-store.cc             | 69 +++++++++++++------
+ src/libfetchers/fetchers.cc                   |  4 +-
+ .../include/nix/fetchers/fetch-to-store.hh    | 14 +++-
+ src/libfetchers/path.cc                       | 35 +++-------
+ tests/functional/flakes/flakes.sh             |  6 ++
+ 6 files changed, 78 insertions(+), 53 deletions(-)
+
+diff --git a/src/libexpr/paths.cc b/src/libexpr/paths.cc
+index ae42423bd..770887564 100644
+--- a/src/libexpr/paths.cc
++++ b/src/libexpr/paths.cc
+@@ -83,8 +83,7 @@ StorePath EvalState::mountInput(
+             if (store->isValidPath(storePath))
+                 _narHash = store->queryPathInfo(storePath)->narHash;
+             else
+-                // FIXME: use fetchToStore to make it cache this
+-                _narHash = accessor->hashPath(CanonPath::root);
++                _narHash = fetchToStore2(fetchSettings, *store, accessor, FetchMode::DryRun, input.getName()).second;
+         }
+         return _narHash;
+     };
+diff --git a/src/libfetchers/fetch-to-store.cc b/src/libfetchers/fetch-to-store.cc
+index f7ab32322..910583f2f 100644
+--- a/src/libfetchers/fetch-to-store.cc
++++ b/src/libfetchers/fetch-to-store.cc
+@@ -4,14 +4,12 @@
+ 
+ namespace nix {
+ 
+-fetchers::Cache::Key makeFetchToStoreCacheKey(
+-    const std::string & name,
++fetchers::Cache::Key makeSourcePathToHashCacheKey(
+     const std::string & fingerprint,
+     ContentAddressMethod method,
+     const std::string & path)
+ {
+-    return fetchers::Cache::Key{"fetchToStore", {
+-        {"name", name},
++    return fetchers::Cache::Key{"sourcePathToHash", {
+         {"fingerprint", fingerprint},
+         {"method", std::string{method.render()}},
+         {"path", path}
+@@ -29,18 +27,37 @@ StorePath fetchToStore(
+     PathFilter * filter,
+     RepairFlag repair)
+ {
+-    // FIXME: add an optimisation for the case where the accessor is
+-    // a `PosixSourceAccessor` pointing to a store path.
+ 
++    return fetchToStore2(settings, store, path, mode, name, method, filter, repair).first;
++}
++
++std::pair<StorePath, Hash> fetchToStore2(
++    const fetchers::Settings & settings,
++    Store & store,
++    const SourcePath & path,
++    FetchMode mode,
++    std::string_view name,
++    ContentAddressMethod method,
++    PathFilter * filter,
++    RepairFlag repair)
++{
+     std::optional<fetchers::Cache::Key> cacheKey;
+ 
+     if (!filter && path.accessor->fingerprint) {
+-        cacheKey = makeFetchToStoreCacheKey(std::string{name}, *path.accessor->fingerprint, method, path.path.abs());
+-        if (auto res = settings.getCache()->lookupStorePath(*cacheKey, store)) {
+-            debug("store path cache hit for '%s'", path);
+-            return res->storePath;
++        cacheKey = makeSourcePathToHashCacheKey(*path.accessor->fingerprint, method, path.path.abs());
++        if (auto res = settings.getCache()->lookup(*cacheKey)) {
++            debug("source path hash cache hit for '%s'", path);
++            auto hash = Hash::parseSRI(fetchers::getStrAttr(*res, "hash"));
++            auto storePath = store.makeFixedOutputPathFromCA(name,
++                ContentAddressWithReferences::fromParts(method, hash, {}));
++            if (store.isValidPath(storePath)) {
++                debug("source path '%s' has valid store path '%s'", path, store.printStorePath(storePath));
++                return {storePath, hash};
++            }
++            debug("source path '%s' not in store", path);
+         }
+     } else
++        // FIXME: could still provide in-memory caching keyed on `SourcePath`.
+         debug("source path '%s' is uncacheable", path);
+ 
+     Activity act(*logger, lvlChatty, actUnknown,
+@@ -48,19 +65,27 @@ StorePath fetchToStore(
+ 
+     auto filter2 = filter ? *filter : defaultPathFilter;
+ 
+-    auto storePath =
+-        mode == FetchMode::DryRun
+-        ? store.computeStorePath(
+-            name, path, method, HashAlgorithm::SHA256, {}, filter2).first
+-        : store.addToStore(
+-            name, path, method, HashAlgorithm::SHA256, {}, filter2, repair);
+-
+-    debug(mode == FetchMode::DryRun ? "hashed '%s'" : "copied '%s' to '%s'", path, store.printStorePath(storePath));
+-
+-    if (cacheKey && mode == FetchMode::Copy)
+-        settings.getCache()->upsert(*cacheKey, store, {}, storePath);
++    if (mode == FetchMode::DryRun) {
++        auto [storePath, hash] = store.computeStorePath(
++            name, path, method, HashAlgorithm::SHA256, {}, filter2);
++        debug("hashed '%s' to '%s'", path, store.printStorePath(storePath));
++        if (cacheKey)
++            fetchers::getCache()->upsert(*cacheKey, {{"hash", hash.to_string(HashFormat::SRI, true)}});
++        return {storePath, hash};
++    } else {
++        auto storePath = store.addToStore(
++             name, path, method, HashAlgorithm::SHA256, {}, filter2, repair);
+ 
+-    return storePath;
++        debug("copied '%s' to '%s'", path, store.printStorePath(storePath));
++        // FIXME: this is the wrong hash when method !=
++        // ContentAddressMethod::Raw::NixArchive. Doesn't matter at
++        // the moment since the only place where that's the case
++        // doesn't use the hash.
++        auto hash = store.queryPathInfo(storePath)->narHash;
++        if (cacheKey)
++            settings.getCache()->upsert(*cacheKey, {{"hash", hash.to_string(HashFormat::SRI, true)}});
++        return {storePath, hash};
++    }
+ }
+ 
+ }
+diff --git a/src/libfetchers/fetchers.cc b/src/libfetchers/fetchers.cc
+index f858025a2..80a0ca9a8 100644
+--- a/src/libfetchers/fetchers.cc
++++ b/src/libfetchers/fetchers.cc
+@@ -352,8 +352,8 @@ std::pair<ref<SourceAccessor>, Input> Input::getAccessorUnchecked(ref<Store> sto
+ 
+     auto [accessor, result] = scheme->getAccessor(store, *this);
+ 
+-    assert(!accessor->fingerprint);
+-    accessor->fingerprint = result.getFingerprint(store);
++    if (!accessor->fingerprint)
++        accessor->fingerprint = result.getFingerprint(store);
+ 
+     return {accessor, std::move(result)};
+ }
+diff --git a/src/libfetchers/include/nix/fetchers/fetch-to-store.hh b/src/libfetchers/include/nix/fetchers/fetch-to-store.hh
+index a52d567ec..753bf8c67 100644
+--- a/src/libfetchers/include/nix/fetchers/fetch-to-store.hh
++++ b/src/libfetchers/include/nix/fetchers/fetch-to-store.hh
+@@ -24,7 +24,17 @@ StorePath fetchToStore(
+     PathFilter * filter = nullptr,
+     RepairFlag repair = NoRepair);
+ 
+-fetchers::Cache::Key makeFetchToStoreCacheKey(
+-    const std::string & name, const std::string & fingerprint, ContentAddressMethod method, const std::string & path);
++std::pair<StorePath, Hash> fetchToStore2(
++    const fetchers::Settings & settings,
++    Store & store,
++    const SourcePath & path,
++    FetchMode mode,
++    std::string_view name = "source",
++    ContentAddressMethod method = ContentAddressMethod::Raw::NixArchive,
++    PathFilter * filter = nullptr,
++    RepairFlag repair = NoRepair);
++
++fetchers::Cache::Key
++makeSourcePathToHashCacheKey(const std::string & fingerprint, ContentAddressMethod method, const std::string & path);
+ 
+ }
+diff --git a/src/libfetchers/path.cc b/src/libfetchers/path.cc
+index 9239fd274..5906271b7 100644
+--- a/src/libfetchers/path.cc
++++ b/src/libfetchers/path.cc
+@@ -145,37 +145,22 @@ struct PathInputScheme : InputScheme
+             storePath = store->addToStoreFromDump(*src, "source");
+         }
+ 
+-        // To avoid copying the path again to the /nix/store, we need to add a cache entry.
+-        ContentAddressMethod method = ContentAddressMethod::Raw::NixArchive;
+-        auto fp = getFingerprint(store, input);
+-        if (fp) {
+-            auto cacheKey = makeFetchToStoreCacheKey(input.getName(), *fp, method, "/");
+-            input.settings->getCache()->upsert(cacheKey, *store, {}, *storePath);
+-        }
++        auto accessor = makeStorePathAccessor(store, *storePath);
++
++        // To prevent `fetchToStore()` copying the path again to Nix
++        // store, pre-create an entry in the fetcher cache.
++        auto info = store->queryPathInfo(*storePath);
++        accessor->fingerprint = fmt("path:%s", store->queryPathInfo(*storePath)->narHash.to_string(HashFormat::SRI, true));
++        input.settings->getCache()->upsert(
++            makeSourcePathToHashCacheKey(*accessor->fingerprint, ContentAddressMethod::Raw::NixArchive, "/"),
++            {{"hash", info->narHash.to_string(HashFormat::SRI, true)}});
+ 
+         /* Trust the lastModified value supplied by the user, if
+            any. It's not a "secure" attribute so we don't care. */
+         if (!input.getLastModified())
+             input.attrs.insert_or_assign("lastModified", uint64_t(mtime));
+ 
+-        return {makeStorePathAccessor(store, *storePath), std::move(input)};
+-    }
+-
+-    std::optional<std::string> getFingerprint(ref<Store> store, const Input & input) const override
+-    {
+-        if (isRelative(input))
+-            return std::nullopt;
+-
+-        /* If this path is in the Nix store, use the hash of the
+-           store object and the subpath. */
+-        auto path = getAbsPath(input);
+-        try {
+-            auto [storePath, subPath] = store->toStorePath(path.string());
+-            auto info = store->queryPathInfo(storePath);
+-            return fmt("path:%s:%s", info->narHash.to_string(HashFormat::Base16, false), subPath);
+-        } catch (Error &) {
+-            return std::nullopt;
+-        }
++        return {accessor, std::move(input)};
+     }
+ 
+     std::optional<ExperimentalFeature> experimentalFeature() const override
+diff --git a/tests/functional/flakes/flakes.sh b/tests/functional/flakes/flakes.sh
+index e335fe6f3..1067b89b1 100755
+--- a/tests/functional/flakes/flakes.sh
++++ b/tests/functional/flakes/flakes.sh
+@@ -112,6 +112,12 @@ nix build -o "$TEST_ROOT/result" "git+file://$flake1Dir#default"
+ nix build -o "$TEST_ROOT/result" "$flake1Dir?ref=HEAD#default"
+ nix build -o "$TEST_ROOT/result" "git+file://$flake1Dir?ref=HEAD#default"
+ 
++ # Check that the fetcher cache works.
++ if [[ $(nix config show lazy-trees) = false ]]; then
++     nix build -o "$TEST_ROOT/result" "git+file://$flake1Dir?ref=HEAD#default" -vvvvv 2>&1 | grepQuietInverse "source path.*is uncacheable"
++     nix build -o "$TEST_ROOT/result" "git+file://$flake1Dir?ref=HEAD#default" -vvvvv 2>&1 | grepQuiet "source path hash cache hit"
++ fi
++
+ # Check that relative paths are allowed for git flakes.
+ # This may change in the future once git submodule support is refined.
+ # See: https://discourse.nixos.org/t/57783 and #9708.
+-- 
+2.49.0
+
+
+From eded5545f7e7dcd1cb2f9756811305ed34a3ea2d Mon Sep 17 00:00:00 2001
+From: Eelco Dolstra <edolstra@gmail.com>
+Date: Mon, 16 Jun 2025 12:09:43 +0200
+Subject: [PATCH 2/4] Give unit tests access to a $HOME directory
+
+Also, don't try to access cache.nixos.org in the libstore unit tests.
+---
+ src/libflake-tests/meson.build      |  1 +
+ src/libflake-tests/package.nix      | 20 ++++++++------------
+ src/libstore-tests/meson.build      |  1 +
+ src/libstore-tests/nix_api_store.cc | 16 +---------------
+ src/libstore-tests/package.nix      | 18 +++++++-----------
+ 5 files changed, 18 insertions(+), 38 deletions(-)
+
+diff --git a/src/libflake-tests/meson.build b/src/libflake-tests/meson.build
+index 593b0e18d..71163c7bd 100644
+--- a/src/libflake-tests/meson.build
++++ b/src/libflake-tests/meson.build
+@@ -59,6 +59,7 @@ test(
+   this_exe,
+   env : {
+     '_NIX_TEST_UNIT_DATA': meson.current_source_dir() / 'data',
++    'HOME': meson.current_build_dir() / 'test-home',
+     'NIX_CONFIG': 'extra-experimental-features = flakes',
+   },
+   protocol : 'gtest',
+diff --git a/src/libflake-tests/package.nix b/src/libflake-tests/package.nix
+index 714f3791a..a233789fa 100644
+--- a/src/libflake-tests/package.nix
++++ b/src/libflake-tests/package.nix
+@@ -56,18 +56,14 @@ mkMesonExecutable (finalAttrs: {
+           {
+             meta.broken = !stdenv.hostPlatform.emulatorAvailable buildPackages;
+           }
+-          (
+-            lib.optionalString stdenv.hostPlatform.isWindows ''
+-              export HOME="$PWD/home-dir"
+-              mkdir -p "$HOME"
+-            ''
+-            + ''
+-              export _NIX_TEST_UNIT_DATA=${resolvePath ./data}
+-              export NIX_CONFIG="extra-experimental-features = flakes"
+-              ${stdenv.hostPlatform.emulator buildPackages} ${lib.getExe finalAttrs.finalPackage}
+-              touch $out
+-            ''
+-          );
++          (''
++            export _NIX_TEST_UNIT_DATA=${resolvePath ./data}
++            export HOME="$TMPDIR/home"
++            export NIX_CONFIG="extra-experimental-features = flakes"
++            mkdir -p "$HOME"
++            ${stdenv.hostPlatform.emulator buildPackages} ${lib.getExe finalAttrs.finalPackage}
++            touch $out
++          '');
+     };
+   };
+ 
+diff --git a/src/libstore-tests/meson.build b/src/libstore-tests/meson.build
+index 8a1ff40f0..8b9893b23 100644
+--- a/src/libstore-tests/meson.build
++++ b/src/libstore-tests/meson.build
+@@ -100,6 +100,7 @@ test(
+   this_exe,
+   env : {
+     '_NIX_TEST_UNIT_DATA': meson.current_source_dir() / 'data',
++    'HOME': meson.current_build_dir() / 'test-home',
+   },
+   protocol : 'gtest',
+ )
+diff --git a/src/libstore-tests/nix_api_store.cc b/src/libstore-tests/nix_api_store.cc
+index 4eb95360a..b7495e0ab 100644
+--- a/src/libstore-tests/nix_api_store.cc
++++ b/src/libstore-tests/nix_api_store.cc
+@@ -28,10 +28,6 @@ TEST_F(nix_api_store_test, nix_store_get_uri)
+ 
+ TEST_F(nix_api_util_context, nix_store_get_storedir_default)
+ {
+-    if (nix::getEnv("HOME").value_or("") == "/homeless-shelter") {
+-        // skipping test in sandbox because nix_store_open tries to create /nix/var/nix/profiles
+-        GTEST_SKIP();
+-    }
+     nix_libstore_init(ctx);
+     Store * store = nix_store_open(ctx, nullptr, nullptr);
+     assert_ctx_ok();
+@@ -136,10 +132,6 @@ TEST_F(nix_api_store_test, nix_store_real_path)
+ 
+ TEST_F(nix_api_util_context, nix_store_real_path_relocated)
+ {
+-    if (nix::getEnv("HOME").value_or("") == "/homeless-shelter") {
+-        // Can't open default store from within sandbox
+-        GTEST_SKIP();
+-    }
+     auto tmp = nix::createTempDir();
+     std::string storeRoot = tmp + "/store";
+     std::string stateDir = tmp + "/state";
+@@ -179,13 +171,7 @@ TEST_F(nix_api_util_context, nix_store_real_path_relocated)
+ 
+ TEST_F(nix_api_util_context, nix_store_real_path_binary_cache)
+ {
+-    if (nix::getEnv("HOME").value_or("") == "/homeless-shelter") {
+-        // TODO: override NIX_CACHE_HOME?
+-        // skipping test in sandbox because narinfo cache can't be written
+-        GTEST_SKIP();
+-    }
+-
+-    Store * store = nix_store_open(ctx, "https://cache.nixos.org", nullptr);
++    Store * store = nix_store_open(ctx, nix::fmt("file://%s/binary-cache", nix::createTempDir()).c_str(), nullptr);
+     assert_ctx_ok();
+     ASSERT_NE(store, nullptr);
+ 
+diff --git a/src/libstore-tests/package.nix b/src/libstore-tests/package.nix
+index b39ee7fa7..1f3701c7f 100644
+--- a/src/libstore-tests/package.nix
++++ b/src/libstore-tests/package.nix
+@@ -73,17 +73,13 @@ mkMesonExecutable (finalAttrs: {
+           {
+             meta.broken = !stdenv.hostPlatform.emulatorAvailable buildPackages;
+           }
+-          (
+-            lib.optionalString stdenv.hostPlatform.isWindows ''
+-              export HOME="$PWD/home-dir"
+-              mkdir -p "$HOME"
+-            ''
+-            + ''
+-              export _NIX_TEST_UNIT_DATA=${data + "/src/libstore-tests/data"}
+-              ${stdenv.hostPlatform.emulator buildPackages} ${lib.getExe finalAttrs.finalPackage}
+-              touch $out
+-            ''
+-          );
++          (''
++            export _NIX_TEST_UNIT_DATA=${data + "/src/libstore-tests/data"}
++            export HOME="$TMPDIR/home"
++            mkdir -p "$HOME"
++            ${stdenv.hostPlatform.emulator buildPackages} ${lib.getExe finalAttrs.finalPackage}
++            touch $out
++          '');
+     };
+   };
+ 
+-- 
+2.49.0
+
+
+From 656ef6987553698aec7d7994eafaa82b38fad373 Mon Sep 17 00:00:00 2001
+From: Eelco Dolstra <edolstra@gmail.com>
+Date: Mon, 16 Jun 2025 16:04:26 +0200
+Subject: [PATCH 3/4] fetchToStore(): Don't require a valid path in dry run
+ mode
+
+---
+ src/libfetchers/fetch-to-store.cc | 5 ++---
+ tests/functional/flakes/flakes.sh | 2 +-
+ 2 files changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/src/libfetchers/fetch-to-store.cc b/src/libfetchers/fetch-to-store.cc
+index 910583f2f..3b26db84f 100644
+--- a/src/libfetchers/fetch-to-store.cc
++++ b/src/libfetchers/fetch-to-store.cc
+@@ -46,12 +46,11 @@ std::pair<StorePath, Hash> fetchToStore2(
+     if (!filter && path.accessor->fingerprint) {
+         cacheKey = makeSourcePathToHashCacheKey(*path.accessor->fingerprint, method, path.path.abs());
+         if (auto res = settings.getCache()->lookup(*cacheKey)) {
+-            debug("source path hash cache hit for '%s'", path);
+             auto hash = Hash::parseSRI(fetchers::getStrAttr(*res, "hash"));
+             auto storePath = store.makeFixedOutputPathFromCA(name,
+                 ContentAddressWithReferences::fromParts(method, hash, {}));
+-            if (store.isValidPath(storePath)) {
+-                debug("source path '%s' has valid store path '%s'", path, store.printStorePath(storePath));
++            if (mode == FetchMode::DryRun || store.isValidPath(storePath)) {
++                debug("source path '%s' cache hit in '%s' (hash '%s')", path, store.printStorePath(storePath), hash.to_string(HashFormat::SRI, true));
+                 return {storePath, hash};
+             }
+             debug("source path '%s' not in store", path);
+diff --git a/tests/functional/flakes/flakes.sh b/tests/functional/flakes/flakes.sh
+index 1067b89b1..63de5373d 100755
+--- a/tests/functional/flakes/flakes.sh
++++ b/tests/functional/flakes/flakes.sh
+@@ -115,7 +115,7 @@ nix build -o "$TEST_ROOT/result" "git+file://$flake1Dir?ref=HEAD#default"
+  # Check that the fetcher cache works.
+  if [[ $(nix config show lazy-trees) = false ]]; then
+      nix build -o "$TEST_ROOT/result" "git+file://$flake1Dir?ref=HEAD#default" -vvvvv 2>&1 | grepQuietInverse "source path.*is uncacheable"
+-     nix build -o "$TEST_ROOT/result" "git+file://$flake1Dir?ref=HEAD#default" -vvvvv 2>&1 | grepQuiet "source path hash cache hit"
++     nix build -o "$TEST_ROOT/result" "git+file://$flake1Dir?ref=HEAD#default" -vvvvv 2>&1 | grepQuiet "source path.*cache hit"
+  fi
+ 
+ # Check that relative paths are allowed for git flakes.
+-- 
+2.49.0
+
+
+From 4749257996b005b4e7469bfaaf0e765ea485cedf Mon Sep 17 00:00:00 2001
+From: Eelco Dolstra <edolstra@gmail.com>
+Date: Mon, 16 Jun 2025 16:05:08 +0200
+Subject: [PATCH 4/4] fetchToStore(): Address a FIXME
+
+---
+ src/libfetchers/fetch-to-store.cc | 50 ++++++++++++++++++-------------
+ 1 file changed, 30 insertions(+), 20 deletions(-)
+
+diff --git a/src/libfetchers/fetch-to-store.cc b/src/libfetchers/fetch-to-store.cc
+index 3b26db84f..25dbf286f 100644
+--- a/src/libfetchers/fetch-to-store.cc
++++ b/src/libfetchers/fetch-to-store.cc
+@@ -64,27 +64,37 @@ std::pair<StorePath, Hash> fetchToStore2(
+ 
+     auto filter2 = filter ? *filter : defaultPathFilter;
+ 
+-    if (mode == FetchMode::DryRun) {
+-        auto [storePath, hash] = store.computeStorePath(
+-            name, path, method, HashAlgorithm::SHA256, {}, filter2);
+-        debug("hashed '%s' to '%s'", path, store.printStorePath(storePath));
+-        if (cacheKey)
+-            fetchers::getCache()->upsert(*cacheKey, {{"hash", hash.to_string(HashFormat::SRI, true)}});
+-        return {storePath, hash};
+-    } else {
+-        auto storePath = store.addToStore(
+-             name, path, method, HashAlgorithm::SHA256, {}, filter2, repair);
++    auto [storePath, hash] =
++        mode == FetchMode::DryRun
++        ? ({
++            auto [storePath, hash] = store.computeStorePath(
++                name, path, method, HashAlgorithm::SHA256, {}, filter2);
++            debug("hashed '%s' to '%s' (hash '%s')", path, store.printStorePath(storePath), hash.to_string(HashFormat::SRI, true));
++            std::make_pair(storePath, hash);
++        })
++        : ({
++            // FIXME: ideally addToStore() would return the hash
++            // right away (like computeStorePath()).
++            auto storePath = store.addToStore(
++                name, path, method, HashAlgorithm::SHA256, {}, filter2, repair);
++            auto info = store.queryPathInfo(storePath);
++            assert(info->references.empty());
++            auto hash =
++                method == ContentAddressMethod::Raw::NixArchive
++                ? info->narHash
++                : ({
++                    if (!info->ca || info->ca->method != method)
++                        throw Error("path '%s' lacks a CA field", store.printStorePath(storePath));
++                    info->ca->hash;
++                });
++            debug("copied '%s' to '%s' (hash '%s')", path, store.printStorePath(storePath), hash.to_string(HashFormat::SRI, true));
++            std::make_pair(storePath, hash);
++        });
+ 
+-        debug("copied '%s' to '%s'", path, store.printStorePath(storePath));
+-        // FIXME: this is the wrong hash when method !=
+-        // ContentAddressMethod::Raw::NixArchive. Doesn't matter at
+-        // the moment since the only place where that's the case
+-        // doesn't use the hash.
+-        auto hash = store.queryPathInfo(storePath)->narHash;
+-        if (cacheKey)
+-            settings.getCache()->upsert(*cacheKey, {{"hash", hash.to_string(HashFormat::SRI, true)}});
+-        return {storePath, hash};
+-    }
++    if (cacheKey)
++        settings.getCache()->upsert(*cacheKey, {{"hash", hash.to_string(HashFormat::SRI, true)}});
++
++    return {storePath, hash};
+ }
+ 
+ }
+-- 
+2.49.0
+
