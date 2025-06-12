@@ -39,16 +39,17 @@ let
   allNodes = mapAttrs (
     key: node:
     let
-      hasOverride = overrides ? ${key};
-      isRelative = node.locked.type or null == "path" && builtins.substring 0 1 node.locked.path != "/";
 
       parentNode = allNodes.${getInputByPath lockFile.root node.parent};
 
       sourceInfo =
-        if hasOverride then
+        if overrides ? ${key} then
           overrides.${key}.sourceInfo
-        else if isRelative then
+        else if node.locked.type == "path" && builtins.substring 0 1 node.locked.path != "/" then
           parentNode.sourceInfo
+          // {
+            outPath = parentNode.result.outPath + ("/" + node.locked.path);
+          }
         else
           # FIXME: remove obsolete node.info.
           # Note: lock file entries are always final.
@@ -56,11 +57,7 @@ let
 
       subdir = overrides.${key}.dir or node.locked.dir or "";
 
-      outPath =
-        if !hasOverride && isRelative then
-          parentNode.outPath + (if node.locked.path == "" then "" else "/" + node.locked.path)
-        else
-          sourceInfo.outPath + (if subdir == "" then "" else "/" + subdir);
+      outPath = sourceInfo + ((if subdir == "" then "" else "/") + subdir);
 
       file = if builtins.pathExists (outPath + "/.devenv.flake.nix")
              then "/.devenv.flake.nix"
