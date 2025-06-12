@@ -798,7 +798,7 @@ LockedFlake lockFlake(
                                 throw Error("'--commit-lock-file' and '--output-lock-file' are incompatible");
                             writeFile(*lockFlags.outputLockFilePath, newLockFileS);
                         } else {
-                            auto relPath = (topRef.subdir == "" ? "" : topRef.subdir + "/") + "flake.lock";
+                            auto relPath = (topRef.subdir == "" ? "" : topRef.subdir + "/") + "devenv.lock";
                             auto outputLockFilePath = *sourcePath / relPath;
 
                             bool lockFileExists = pathExists(outputLockFilePath);
@@ -829,7 +829,7 @@ LockedFlake lockFlake(
                             }
 
                             topRef.input.putFile(
-                                CanonPath((topRef.subdir == "" ? "" : topRef.subdir + "/") + "flake.lock"),
+                                CanonPath((topRef.subdir == "" ? "" : topRef.subdir + "/") + "devenv.lock"),
                                 newLockFileS, commitMessage);
                         }
 
