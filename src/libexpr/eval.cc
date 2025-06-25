@@ -1123,7 +1123,8 @@ void EvalState::evalFile(const SourcePath & path, Value & v, bool mustBeTrivial)
         return;
     }
 
-    printTalkative("evaluating file '%1%'", resolvedPath);
+    auto physicalPath = resolvedPath.getPhysicalPath();
+    printTalkative("evaluating file '%1%'", physicalPath ? physicalPath->string() : resolvedPath.to_string());
     Expr * e = nullptr;
 
     auto j = fileParseCache.find(resolvedPath);

@@ -1767,7 +1767,8 @@ static void prim_pathExists(EvalState & state, const PosIdx pos, Value * * args,
             mustBeDir ? SymlinkResolution::Full : SymlinkResolution::Ancestors;
         auto path = realisePath(state, pos, arg, symlinkResolution);
 
-        printTalkative("devenv pathExists: '%1%'", path);
+        auto physicalPath = path.getPhysicalPath();
+        printTalkative("devenv pathExists: '%1%'", physicalPath ? physicalPath->string() : path.to_string());
 
         auto st = path.maybeLstat();
         auto exists = st && (!mustBeDir || st->type == SourceAccessor::tDirectory);
@@ -1869,7 +1870,8 @@ static RegisterPrimOp primop_dirOf({
 static void prim_readFile(EvalState & state, const PosIdx pos, Value * * args, Value & v)
 {
     auto path = realisePath(state, pos, *args[0]);
-    printTalkative("devenv readFile: '%1%'", path);
+    auto physicalPath = path.getPhysicalPath();
+    printTalkative("devenv readFile: '%1%'", physicalPath ? physicalPath->string() : path.to_string());
     auto s = path.readFile();
     if (s.find((char) 0) != std::string::npos)
         state.error<EvalError>(
@@ -2138,7 +2140,8 @@ static RegisterPrimOp primop_readFileType({
 static void prim_readDir(EvalState & state, const PosIdx pos, Value * * args, Value & v)
 {
     auto path = realisePath(state, pos, *args[0]);
-    printTalkative("devenv readDir: '%1%'", path);
+    auto physicalPath = path.getPhysicalPath();
+    printTalkative("devenv readDir: '%1%'", physicalPath ? physicalPath->string() : path.to_string());
 
     // Retrieve directory entries for all nodes in a directory.
     // This is similar to `getFileType` but is optimized to reduce system calls
