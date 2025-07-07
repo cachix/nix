@@ -5,6 +5,7 @@
 #include "nix/fetchers/cache.hh"
 #include "nix/fetchers/fetch-to-store.hh"
 #include "nix/fetchers/fetch-settings.hh"
+#include "nix/util/posix-source-accessor.hh"
 
 namespace nix::fetchers {
 
@@ -128,38 +129,33 @@ struct PathInputScheme : InputScheme
 
         auto absPath = getAbsPath(input);
 
-        Activity act(*logger, lvlTalkative, actUnknown, fmt("copying %s to the store", absPath));
-
         // FIXME: check whether access to 'path' is allowed.
         auto storePath = store->maybeParseStorePath(absPath.string());
 
-        if (storePath)
+        if (storePath) {
             store->addTempRoot(*storePath);
 
-        time_t mtime = 0;
-        if (!storePath || storePath->name() != "source" || !store->isValidPath(*storePath)) {
-            // FIXME: try to substitute storePath.
-            auto src = sinkToSource([&](Sink & sink) {
-                mtime = dumpPathAndGetMtime(absPath.string(), sink, defaultPathFilter);
-            });
-            storePath = store->addToStoreFromDump(*src, "source");
+            // If it's already a store path, use store accessor
+            Activity act(*logger, lvlTalkative, actUnknown, fmt("using store path %s", absPath));
+
+            auto accessor = makeStorePathAccessor(store, *storePath);
+
+            // To prevent `fetchToStore()` copying the path again to Nix
+            // store, pre-create an entry in the fetcher cache.
+            auto info = store->queryPathInfo(*storePath);
+            accessor->fingerprint = fmt("path:%s", store->queryPathInfo(*storePath)->narHash.to_string(HashFormat::SRI, true));
+            input.settings->getCache()->upsert(
+                makeSourcePathToHashCacheKey(*accessor->fingerprint, ContentAddressMethod::Raw::NixArchive, "/"),
+                {{"hash", info->narHash.to_string(HashFormat::SRI, true)}});
+
+            return {accessor, std::move(input)};
         }
 
-        auto accessor = makeStorePathAccessor(store, *storePath);
+        // For local directories, use direct filesystem access like devenv-2.24 behavior
+        Activity act(*logger, lvlTalkative, actUnknown, fmt("using local directory %s", absPath));
 
-        // To prevent `fetchToStore()` copying the path again to Nix
-        // store, pre-create an entry in the fetcher cache.
-        auto info = store->queryPathInfo(*storePath);
-        accessor->fingerprint = fmt("path:%s", store->queryPathInfo(*storePath)->narHash.to_string(HashFormat::SRI, true));
-        input.settings->getCache()->upsert(
-            makeSourcePathToHashCacheKey(*accessor->fingerprint, ContentAddressMethod::Raw::NixArchive, "/"),
-            {{"hash", info->narHash.to_string(HashFormat::SRI, true)}});
-
-        /* Trust the lastModified value supplied by the user, if
-           any. It's not a "secure" attribute so we don't care. */
-        if (!input.getLastModified())
-            input.attrs.insert_or_assign("lastModified", uint64_t(mtime));
-
+        auto accessor = makeFSSourceAccessor(absPath);
+        accessor->setPathDisplay(absPath.string());
         return {accessor, std::move(input)};
     }
 
