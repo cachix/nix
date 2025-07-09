@@ -822,6 +822,12 @@ struct GitInputScheme : InputScheme
             ? getLastModified(*input.settings, repoInfo, repoPath, *repoInfo.workdirInfo.headRev)
             : 0);
 
+        // For non-flake inputs (flake: false), preserve the local filesystem path
+        // instead of forcing it through the store. This restores devenv-2.24 behavior.
+        if (input.attrs.find("__final") != input.attrs.end()) {
+            input.attrs.insert_or_assign("outPath", repoPath.string());
+        }
+
         return {accessor, std::move(input)};
     }
 
