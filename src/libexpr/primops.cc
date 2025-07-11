@@ -1037,7 +1037,13 @@ static void prim_getEnv(EvalState & state, const PosIdx pos, Value * * args, Val
 {
     std::string name(state.forceStringNoCtx(*args[0], pos, "while evaluating the first argument passed to builtins.getEnv"));
     printTalkative("devenv getEnv: '%1%'", name);
-    v.mkString(state.settings.restrictEval || state.settings.pureEval ? "" : getEnv(name).value_or(""));
+
+    // Allow SECRETSPEC_SECRETS even in pure/restricted mode
+    if (name == "SECRETSPEC_SECRETS" || !(state.settings.restrictEval || state.settings.pureEval)) {
+        v.mkString(getEnv(name).value_or(""));
+    } else {
+        v.mkString("");
+    }
 }
 
 static RegisterPrimOp primop_getEnv({
