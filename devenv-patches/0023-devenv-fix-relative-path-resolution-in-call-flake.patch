@@ -1,0 +1,31 @@
+From e114a9318a6d90740a43821581a3415d8423a674 Mon Sep 17 00:00:00 2001
+From: Sander <hey@sandydoo.me>
+Date: Thu, 10 Jul 2025 00:42:01 +0200
+Subject: [PATCH 2/2] devenv: fix relative path resolution in call-flake
+
+Use the original source location instead of the store path when
+resolving relative paths. This restores devenv-2.24 behaviour.
+---
+ src/libfetchers/git.cc | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/src/libfetchers/git.cc b/src/libfetchers/git.cc
+index 9de249394..1de9f2149 100644
+--- a/src/libfetchers/git.cc
++++ b/src/libfetchers/git.cc
+@@ -822,6 +822,12 @@ struct GitInputScheme : InputScheme
+             ? getLastModified(*input.settings, repoInfo, repoPath, *repoInfo.workdirInfo.headRev)
+             : 0);
+ 
++        // For non-flake inputs (flake: false), preserve the local filesystem path
++        // instead of forcing it through the store. This restores devenv-2.24 behavior.
++        if (input.attrs.find("__final") != input.attrs.end()) {
++            input.attrs.insert_or_assign("outPath", repoPath.string());
++        }
++
+         return {accessor, std::move(input)};
+     }
+ 
+-- 
+2.49.0
+
