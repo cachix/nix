@@ -48,6 +48,7 @@ struct PathInputScheme : InputScheme
     {
         return {
             "path",
+            "lock",
             /* Allow the user to pass in "fake" tree info
                attributes. This is useful for making a pinned tree work
                the same as the repository from which is exported (e.g.

@@ -90,10 +90,14 @@ StorePath EvalState::mountInput(
 
     storeFS->mount(CanonPath(store->printStorePath(storePath)), accessor);
 
-    if (requireLockable && (!settings.lazyTrees || !input.isLocked()) && !input.getNarHash())
+    // Check if this is a path input with lock=false - if so, don't force NAR hash computation and skip validation
+    bool isUnlockedPathInput = input.getType() == "path" &&
+                               fetchers::maybeGetBoolAttr(input.attrs, "lock").value_or(false) == false;
+
+    if (requireLockable && (!settings.lazyTrees || !input.isLocked()) && !input.getNarHash() && !isUnlockedPathInput)
         input.attrs.insert_or_assign("narHash", getNarHash()->to_string(HashFormat::SRI, true));
 
-    if (originalInput.getNarHash() && *getNarHash() != *originalInput.getNarHash())
+    if (originalInput.getNarHash() && !isUnlockedPathInput && *getNarHash() != *originalInput.getNarHash())
         throw Error(
             (unsigned int) 102,
             "NAR hash mismatch in input '%s', expected '%s' but got '%s'",
