@@ -7,6 +7,8 @@
 #include "nix/fetchers/fetch-settings.hh"
 #include "nix/util/posix-source-accessor.hh"
 
+#include <sys/stat.h>
+
 namespace nix::fetchers {
 
 struct PathInputScheme : InputScheme
@@ -156,6 +158,14 @@ struct PathInputScheme : InputScheme
 
         auto accessor = makeFSSourceAccessor(absPath);
         accessor->setPathDisplay(absPath.string());
+
+        // Generate a fingerprint based on directory mtime to enable proper caching
+        // This ensures NAR hash consistency when directory content hasn't changed
+        struct stat st;
+        if (lstat(absPath.string().c_str(), &st) == 0) {
+            accessor->fingerprint = fmt("path:%s:%d", absPath.string(), st.st_mtime);
+        }
+
         return {accessor, std::move(input)};
     }
 
