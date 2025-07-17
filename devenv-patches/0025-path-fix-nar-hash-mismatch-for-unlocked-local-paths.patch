@@ -1,0 +1,55 @@
+From d879e0f029613a78ec5fe3667363de5fd3c97a58 Mon Sep 17 00:00:00 2001
+From: Sander <hey@sandydoo.me>
+Date: Sat, 12 Jul 2025 16:20:35 +0200
+Subject: [PATCH 2/2] path: fix NAR hash mismatch for unlocked local path
+ inputs
+
+Path inputs now support a `lock` attribute (defaults to false) that
+controls whether NAR hash computation and validation is performed.
+When `lock=false` (the default), path inputs use direct filesystem
+access without NAR hash validation, allowing source modifications
+without lock file regeneration.
+
+This restores the devenv-2.24 behavior where path inputs remained
+unlocked by default and reflected current filesystem state.
+---
+ src/libexpr/paths.cc    | 8 ++++++--
+ src/libfetchers/path.cc | 1 +
+ 2 files changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/src/libexpr/paths.cc b/src/libexpr/paths.cc
+index 770887564..6a07ca05e 100644
+--- a/src/libexpr/paths.cc
++++ b/src/libexpr/paths.cc
+@@ -90,10 +90,14 @@ StorePath EvalState::mountInput(
+ 
+     storeFS->mount(CanonPath(store->printStorePath(storePath)), accessor);
+ 
+-    if (requireLockable && (!settings.lazyTrees || !input.isLocked()) && !input.getNarHash())
++    // Check if this is a path input with lock=false - if so, don't force NAR hash computation and skip validation
++    bool isUnlockedPathInput = input.getType() == "path" &&
++                               fetchers::maybeGetBoolAttr(input.attrs, "lock").value_or(false) == false;
++
++    if (requireLockable && (!settings.lazyTrees || !input.isLocked()) && !input.getNarHash() && !isUnlockedPathInput)
+         input.attrs.insert_or_assign("narHash", getNarHash()->to_string(HashFormat::SRI, true));
+ 
+-    if (originalInput.getNarHash() && *getNarHash() != *originalInput.getNarHash())
++    if (originalInput.getNarHash() && !isUnlockedPathInput && *getNarHash() != *originalInput.getNarHash())
+         throw Error(
+             (unsigned int) 102,
+             "NAR hash mismatch in input '%s', expected '%s' but got '%s'",
+diff --git a/src/libfetchers/path.cc b/src/libfetchers/path.cc
+index 54ec37762..baa18e92b 100644
+--- a/src/libfetchers/path.cc
++++ b/src/libfetchers/path.cc
+@@ -48,6 +48,7 @@ struct PathInputScheme : InputScheme
+     {
+         return {
+             "path",
++            "lock",
+             /* Allow the user to pass in "fake" tree info
+                attributes. This is useful for making a pinned tree work
+                the same as the repository from which is exported (e.g.
+-- 
+2.49.0
+
