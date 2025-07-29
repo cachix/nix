@@ -134,7 +134,7 @@ std::pair<FlakeRef, std::string> parsePathFlakeRefWithFragment(
                     if (pathExists(path + "/.devenv.flake.nix")) {
                         found = true;
                         break;
-                    } else if (pathExists(path + "/.git"))
+                    } else if (pathExists(path + "/devenv.nix"))
                         throw Error("path '%s' is not part of a flake (neither it nor its parent directories contain a '.devenv.flake.nix' file)", path);
                     else {
                         if (lstat(path).st_dev != device)

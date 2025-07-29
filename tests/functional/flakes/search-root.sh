@@ -43,10 +43,10 @@ sed "s,$PWD/foo,$PWD/foo/subdir,g" -i flake.nix
 
 if [[ -n $(type -p git) ]]; then
     pushd subdir
-    git init
+    echo '{}' > devenv.nix
     for i in "${success[@]}" "${failure[@]}"; do
-        ! nix build "$i" || fail "flake should not search past a git repository"
+        ! nix build "$i" || fail "flake should not search past a devenv.nix file"
     done
-    rm -rf .git
+    rm -f devenv.nix
     popd
 fi
