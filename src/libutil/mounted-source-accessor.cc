@@ -5,6 +5,8 @@ namespace nix {
 struct MountedSourceAccessorImpl : MountedSourceAccessor
 {
     std::map<CanonPath, ref<SourceAccessor>> mounts;
+    // Track original paths for virtual store paths to enable proper path display
+    std::map<CanonPath, std::optional<std::filesystem::path>> originalPaths;
 
     MountedSourceAccessorImpl(std::map<CanonPath, ref<SourceAccessor>> _mounts)
         : mounts(std::move(_mounts))
@@ -72,14 +74,40 @@ struct MountedSourceAccessorImpl : MountedSourceAccessor
 
     std::optional<std::filesystem::path> getPhysicalPath(const CanonPath & path) override
     {
+        // First resolve which accessor and subpath we're dealing with
         auto [accessor, subpath] = resolve(path);
+
+        // Get the mount point for this accessor
+        for (const auto & [mountPoint, mountedAccessor] : mounts) {
+            if (mountedAccessor == accessor) {
+                // Check if we have an original path stored for this mount
+                auto it = originalPaths.find(mountPoint);
+                if (it != originalPaths.end() && it->second) {
+                    // Reconstruct the full path using the original path
+                    if (subpath.isRoot()) {
+                        return *it->second;
+                    } else {
+                        return *it->second / subpath.rel();
+                    }
+                }
+                break;
+            }
+        }
+
+        // Fallback to the accessor's own physical path
         return accessor->getPhysicalPath(subpath);
     }
 
     void mount(CanonPath mountPoint, ref<SourceAccessor> accessor) override
     {
         // FIXME: thread-safety
-        mounts.insert_or_assign(std::move(mountPoint), accessor);
+        mounts.insert_or_assign(mountPoint, accessor);
+
+        // Try to get the physical path from the accessor and store it
+        auto physicalPath = accessor->getPhysicalPath(CanonPath::root);
+        if (physicalPath) {
+            originalPaths[mountPoint] = physicalPath;
+        }
     }
 
     std::shared_ptr<SourceAccessor> getMount(CanonPath mountPoint) override
