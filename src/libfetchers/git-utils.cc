@@ -421,12 +421,7 @@ struct GitRepoImpl : GitRepo, std::enable_shared_from_this<GitRepoImpl>
         {
             if (!(statusFlags & GIT_STATUS_INDEX_DELETED) &&
                 !(statusFlags & GIT_STATUS_WT_DELETED))
-            {
                 info.files.insert(CanonPath(path));
-                if (statusFlags != GIT_STATUS_CURRENT)
-                    info.dirtyFiles.insert(CanonPath(path));
-            } else
-                info.deletedFiles.insert(CanonPath(path));
             if (statusFlags != GIT_STATUS_CURRENT)
                 info.isDirty = true;
             return 0;
