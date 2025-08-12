@@ -857,33 +857,10 @@ struct GitInputScheme : InputScheme
 
     std::optional<std::string> getFingerprint(ref<Store> store, const Input & input) const override
     {
-        auto makeFingerprint = [&](const Hash & rev)
-        {
-            return rev.gitRev() + (getSubmodulesAttr(input) ? ";s" : "") + (getExportIgnoreAttr(input) ? ";e" : "") + (getLfsAttr(input) ? ";l" : "");
-        };
-
         if (auto rev = input.getRev())
-            return makeFingerprint(*rev);
-        else {
-            auto repoInfo = getRepoInfo(input);
-            if (auto repoPath = repoInfo.getPath(); repoPath && repoInfo.workdirInfo.headRev && repoInfo.workdirInfo.submodules.empty()) {
-                /* Calculate a fingerprint that takes into account the
-                   deleted and modified/added files. */
-                HashSink hashSink{HashAlgorithm::SHA512};
-                for (auto & file : repoInfo.workdirInfo.dirtyFiles) {
-                    writeString("modified:", hashSink);
-                    writeString(file.abs(), hashSink);
-                    dumpPath((*repoPath / file.rel()).string(), hashSink);
-                }
-                for (auto & file : repoInfo.workdirInfo.deletedFiles) {
-                    writeString("deleted:", hashSink);
-                    writeString(file.abs(), hashSink);
-                }
-                return makeFingerprint(*repoInfo.workdirInfo.headRev)
-                    + ";d=" + hashSink.finish().first.to_string(HashFormat::Base16, false);
-            }
+            return rev->gitRev() + (getSubmodulesAttr(input) ? ";s" : "") + (getExportIgnoreAttr(input) ? ";e" : "") + (getLfsAttr(input) ? ";l" : "");
+        else
             return std::nullopt;
-        }
     }
 
     bool isLocked(const Input & input) const override
