@@ -1773,7 +1773,7 @@ static void prim_pathExists(EvalState & state, const PosIdx pos, Value * * args,
             mustBeDir ? SymlinkResolution::Full : SymlinkResolution::Ancestors;
         auto path = realisePath(state, pos, arg, symlinkResolution);
 
-        auto physicalPath = path.getPhysicalPath();
+        auto physicalPath = state.getPhysicalPath(path);
         printTalkative("devenv pathExists: '%1%'", physicalPath ? physicalPath->string() : path.to_string());
 
         auto st = path.maybeLstat();
@@ -1876,7 +1876,7 @@ static RegisterPrimOp primop_dirOf({
 static void prim_readFile(EvalState & state, const PosIdx pos, Value * * args, Value & v)
 {
     auto path = realisePath(state, pos, *args[0]);
-    auto physicalPath = path.getPhysicalPath();
+    auto physicalPath = state.getPhysicalPath(path);
     printTalkative("devenv readFile: '%1%'", physicalPath ? physicalPath->string() : path.to_string());
     auto s = path.readFile();
     if (s.find((char) 0) != std::string::npos)
@@ -2146,7 +2146,7 @@ static RegisterPrimOp primop_readFileType({
 static void prim_readDir(EvalState & state, const PosIdx pos, Value * * args, Value & v)
 {
     auto path = realisePath(state, pos, *args[0]);
-    auto physicalPath = path.getPhysicalPath();
+    auto physicalPath = state.getPhysicalPath(path);
     printTalkative("devenv readDir: '%1%'", physicalPath ? physicalPath->string() : path.to_string());
 
     // Retrieve directory entries for all nodes in a directory.

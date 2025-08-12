@@ -611,6 +611,12 @@ public:
     std::string computeBaseName(const SourcePath & path);
 
     /**
+     * Get the physical filesystem path for a SourcePath, if available.
+     * Returns the physical path if it exists, or attempts to resolve store paths.
+     */
+    std::optional<std::filesystem::path> getPhysicalPath(const SourcePath & path);
+
+    /**
      * Path coercion.
      *
      * Converts strings, paths and derivations to a

@@ -411,6 +411,58 @@ void EvalState::allowAndSetStorePathString(const StorePath & storePath, Value & 
     mkStorePathString(storePath, v);
 }
 
+std::optional<std::filesystem::path> EvalState::getPhysicalPath(const SourcePath & path)
+{
+    // FIRST check if this is a store path that might be mounted
+    // This needs to happen before checking the direct physical path
+    // because in impure mode, the UnionSourceAccessor will return the actual
+    // /nix/store path as a physical path, but we want to resolve to the original mount
+
+    // Check if this path starts with the store directory
+    bool isStorePath = path.path.abs().starts_with(store->storeDir + "/");
+
+    if (isStorePath) {
+        // Extract just the store path part (without subpaths)
+        std::string pathStr = path.path.abs();
+        std::string storePrefix = store->storeDir + "/";
+        std::string relativePath = pathStr.substr(storePrefix.length());
+
+        // Find the end of the store path (next slash or end of string)
+        auto slashPos = relativePath.find('/');
+        std::string storePathName = slashPos != std::string::npos
+            ? relativePath.substr(0, slashPos)
+            : relativePath;
+
+        std::string fullStorePath = storePrefix + storePathName;
+
+        auto storePath = store->parseStorePath(fullStorePath);
+        auto mountPath = CanonPath(store->printStorePath(storePath));
+
+        if (auto mount = storeFS.dynamic_pointer_cast<MountedSourceAccessor>()) {
+            if (auto accessor = mount->getMount(mountPath)) {
+                // Get the relative path within the mount
+                std::string relPath;
+                if (slashPos != std::string::npos) {
+                    relPath = relativePath.substr(slashPos + 1);
+                }
+
+                // Try to get the physical path from the mounted accessor
+                auto mountPhysical = accessor->getPhysicalPath(CanonPath::root);
+                if (mountPhysical) {
+                    if (relPath.empty()) {
+                        return *mountPhysical;
+                    } else {
+                        return *mountPhysical / relPath;
+                    }
+                }
+            }
+        }
+    }
+
+    // If not a mounted store path, try the path's own physical path
+    return path.getPhysicalPath();
+}
+
 inline static bool isJustSchemePrefix(std::string_view prefix)
 {
     return
@@ -1123,7 +1175,7 @@ void EvalState::evalFile(const SourcePath & path, Value & v, bool mustBeTrivial)
         return;
     }
 
-    auto physicalPath = resolvedPath.getPhysicalPath();
+    auto physicalPath = getPhysicalPath(resolvedPath);
     printTalkative("evaluating file '%1%'", physicalPath ? physicalPath->string() : resolvedPath.to_string());
     Expr * e = nullptr;
 
