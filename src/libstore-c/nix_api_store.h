@@ -490,7 +490,6 @@ nix_err nix_store_add_perm_root(nix_c_context * context, Store * store, StorePat
  * @return NIX_OK on success, or an error code on failure
  */
 nix_err nix_store_add_indirect_root(nix_c_context * context, Store * store, const char * symlink_path);
-
 // cffi end
 #ifdef __cplusplus
 }
