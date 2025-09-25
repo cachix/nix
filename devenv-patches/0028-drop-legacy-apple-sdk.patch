@@ -1,0 +1,66 @@
+From 20b532eab0f05e58e2080d5d62411d990daffb78 Mon Sep 17 00:00:00 2001
+From: Sergei Zimmerman <sergei@zimmerman.foo>
+Date: Sat, 13 Sep 2025 01:07:42 +0300
+Subject: [PATCH] packaging: Drop legacy apple sdk pattern
+
+This has been dropped on unstable an nix no longer
+compiled with overridden nixpkgs input. On 25.05 these
+overrides already do nothing.
+
+Tested with:
+
+nix build .#packages.x86_64-darwin.nix-cli -L --override-input nixpkgs https://releases.nixos.org/nixos/unstable/nixos-25.11pre859555.ab0f3607a6c7/nixexprs.tar.xz
+
+Default deployment target on 25.05 is 11.3, so 10.13
+sdk override doesn't have to be updated at all as evident
+from the fact that we didn't observe any issues with it.
+---
+ packaging/dependencies.nix | 19 -------------------
+ src/libstore/package.nix   |  2 --
+ 2 files changed, 21 deletions(-)
+
+diff --git a/packaging/dependencies.nix b/packaging/dependencies.nix
+index 16dd34d0e08..981c1aa4807 100644
+--- a/packaging/dependencies.nix
++++ b/packaging/dependencies.nix
+@@ -10,27 +10,8 @@
+   stdenv,
+ }:
+ 
+-let
+-  prevStdenv = stdenv;
+-in
+-
+ let
+   inherit (pkgs) lib;
+-
+-  stdenv = if prevStdenv.isDarwin && prevStdenv.isx86_64 then darwinStdenv else prevStdenv;
+-
+-  # Fix the following error with the default x86_64-darwin SDK:
+-  #
+-  #     error: aligned allocation function of type 'void *(std::size_t, std::align_val_t)' is only available on macOS 10.13 or newer
+-  #
+-  # Despite the use of the 10.13 deployment target here, the aligned
+-  # allocation function Clang uses with this setting actually works
+-  # all the way back to 10.6.
+-  # NOTE: this is not just a version constraint, but a request to make Darwin
+-  #       provide this version level of support. Removing this minimum version
+-  #       request will regress the above error.
+-  darwinStdenv = pkgs.overrideSDK prevStdenv { darwinMinVersion = "10.13"; };
+-
+ in
+ scope: {
+   inherit stdenv;
+diff --git a/src/libstore/package.nix b/src/libstore/package.nix
+index 47805547b8e..d890d2256c3 100644
+--- a/src/libstore/package.nix
++++ b/src/libstore/package.nix
+@@ -64,8 +64,6 @@ mkMesonLibrary (finalAttrs: {
+     sqlite
+   ]
+   ++ lib.optional stdenv.hostPlatform.isLinux libseccomp
+-  # There have been issues building these dependencies
+-  ++ lib.optional stdenv.hostPlatform.isDarwin darwin.apple_sdk.libs.sandbox
+   ++ lib.optional withAWS aws-sdk-cpp;
+ 
+   propagatedBuildInputs = [
