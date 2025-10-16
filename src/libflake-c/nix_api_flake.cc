@@ -171,6 +171,19 @@ nix_err nix_flake_lock_flags_add_input_override(
     NIXC_CATCH_ERRS
 }
 
+nix_err nix_flake_lock_flags_add_input_update(
+    nix_c_context * context, nix_flake_lock_flags * flags, const char * inputPath, size_t inputPathLen)
+{
+    nix_clear_err(context);
+    try {
+        std::string pathStr(inputPath, inputPathLen);
+        auto path = nix::flake::parseInputAttrPath(pathStr);
+        flags->lockFlags->inputUpdates.insert(path);
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
 nix_locked_flake * nix_flake_lock(
     nix_c_context * context,
     nix_fetchers_settings * fetchSettings,
@@ -202,6 +215,125 @@ nix_value * nix_locked_flake_get_output_attrs(
         auto v = nix_alloc_value(context, evalState);
         nix::flake::callFlake(evalState->state, *lockedFlake->lockedFlake, v->value);
         return v;
+    }
+    NIXC_CATCH_ERRS_NULL
+}
+
+nix_flake_input * nix_flake_input_new(nix_c_context * context, nix_flake_reference * flakeRef, bool isFlake)
+{
+    nix_clear_err(context);
+    try {
+        nix::flake::FlakeInput input;
+        input.ref = *flakeRef->flakeRef;
+        input.isFlake = isFlake;
+        return new nix_flake_input{std::move(input)};
+    }
+    NIXC_CATCH_ERRS_NULL
+}
+
+void nix_flake_input_free(nix_flake_input * input)
+{
+    delete input;
+}
+
+nix_flake_inputs * nix_flake_inputs_new(nix_c_context * context)
+{
+    nix_clear_err(context);
+    try {
+        return new nix_flake_inputs{nix::flake::FlakeInputs{}};
+    }
+    NIXC_CATCH_ERRS_NULL
+}
+
+nix_err nix_flake_inputs_add(
+    nix_c_context * context, nix_flake_inputs * inputs, const char * name, size_t nameLen, nix_flake_input * input)
+{
+    nix_clear_err(context);
+    try {
+        std::string inputName(name, nameLen);
+        inputs->inputs.emplace(inputName, std::move(input->input));
+        delete input; // Transfer ownership
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+void nix_flake_inputs_free(nix_flake_inputs * inputs)
+{
+    delete inputs;
+}
+
+nix_lock_file * nix_lock_file_new(nix_c_context * context)
+{
+    nix_clear_err(context);
+    try {
+        return new nix_lock_file{nix::flake::LockFile{}};
+    }
+    NIXC_CATCH_ERRS_NULL
+}
+
+nix_lock_file * nix_lock_file_parse(
+    nix_c_context * context,
+    nix_fetchers_settings * fetchSettings,
+    const char * content,
+    size_t contentLen,
+    const char * sourcePath,
+    size_t sourcePathLen)
+{
+    nix_clear_err(context);
+    try {
+        std::string contentStr(content, contentLen);
+        std::string pathStr = sourcePathLen > 0 ? std::string(sourcePath, sourcePathLen) : "<string>";
+        return new nix_lock_file{nix::flake::LockFile(*fetchSettings->settings, contentStr, pathStr)};
+    }
+    NIXC_CATCH_ERRS_NULL
+}
+
+nix_err nix_lock_file_to_string(
+    nix_c_context * context, nix_lock_file * lockFile, nix_get_string_callback callback, void * user_data)
+{
+    nix_clear_err(context);
+    try {
+        auto [jsonStr, keyMap] = lockFile->lockFile.to_string();
+        return call_nix_get_string_callback(jsonStr, callback, user_data);
+    }
+    NIXC_CATCH_ERRS
+}
+
+void nix_lock_file_free(nix_lock_file * lockFile)
+{
+    delete lockFile;
+}
+
+nix_lock_file * nix_flake_lock_inputs(
+    nix_c_context * context,
+    nix_fetchers_settings * fetchSettings,
+    nix_flake_settings * flakeSettings,
+    EvalState * evalState,
+    nix_flake_inputs * inputs,
+    const char * sourcePath,
+    size_t sourcePathLen,
+    nix_lock_file * oldLockFile,
+    nix_flake_lock_flags * flags)
+{
+    nix_clear_err(context);
+    try {
+        // Create source path
+        std::string pathStr(sourcePath, sourcePathLen);
+        nix::SourcePath srcPath = evalState->state.rootPath(nix::CanonPath(pathStr));
+
+        // Create lock request
+        nix::flake::InputLockRequest request{
+            .inputs = inputs->inputs,
+            .sourcePath = srcPath,
+            .oldLockFile = oldLockFile ? &oldLockFile->lockFile : nullptr,
+            .lockFlags = *flags->lockFlags,
+        };
+
+        // Call lockInputs
+        auto [newLockFile, nodePaths] = nix::flake::lockInputs(*flakeSettings->settings, evalState->state, request);
+
+        return new nix_lock_file{std::move(newLockFile)};
     }
     NIXC_CATCH_ERRS_NULL
 }

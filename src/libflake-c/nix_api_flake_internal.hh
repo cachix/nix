@@ -30,3 +30,18 @@ struct nix_locked_flake
 {
     nix::ref<nix::flake::LockedFlake> lockedFlake;
 };
+
+struct nix_flake_input
+{
+    nix::flake::FlakeInput input;
+};
+
+struct nix_flake_inputs
+{
+    nix::flake::FlakeInputs inputs;
+};
+
+struct nix_lock_file
+{
+    nix::flake::LockFile lockFile;
+};

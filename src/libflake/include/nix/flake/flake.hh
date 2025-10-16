@@ -214,6 +214,49 @@ struct LockFlags
     std::set<InputAttrPath> inputUpdates;
 };
 
+/**
+ * Request to lock inputs without requiring a top-level flake.nix.
+ * Allows programmatic construction of input specifications.
+ */
+struct InputLockRequest
+{
+    /**
+     * The inputs to lock. These are provided directly rather than
+     * being parsed from flake.nix.
+     */
+    FlakeInputs inputs;
+
+    /**
+     * Base path for resolving relative input references.
+     */
+    SourcePath sourcePath;
+
+    /**
+     * Existing lock file to use as a basis (nullptr for empty lock file).
+     */
+    const LockFile * oldLockFile = nullptr;
+
+    /**
+     * Locking flags controlling update behavior.
+     */
+    LockFlags lockFlags;
+};
+
+/**
+ * Lock inputs without reading a top-level flake.nix.
+ *
+ * This function takes manually-constructed FlakeInputs and computes
+ * a lock file. EvalState is still required because transitive flake
+ * inputs need to be fetched and evaluated.
+ *
+ * @param settings Flake settings
+ * @param state EvalState for fetching/evaluating transitive flakes
+ * @param request Lock request containing inputs and parameters
+ * @return LockFile and nodePaths mapping
+ */
+std::pair<LockFile, std::map<ref<Node>, SourcePath>>
+lockInputs(const Settings & settings, EvalState & state, const InputLockRequest & request);
+
 LockedFlake
 lockFlake(const Settings & settings, EvalState & state, const FlakeRef & flakeRef, const LockFlags & lockFlags);
 
