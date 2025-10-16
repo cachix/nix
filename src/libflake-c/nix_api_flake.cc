@@ -469,5 +469,4 @@ void nix_lock_file_inputs_iterator_free(nix_lock_file_inputs_iterator * iter)
 {
     delete iter;
 }
-
 } // extern "C"

@@ -91,7 +91,6 @@ typedef struct nix_lock_file nix_lock_file;
  * @see nix_lock_file_inputs_iterator_free
  */
 typedef struct nix_lock_file_inputs_iterator nix_lock_file_inputs_iterator;
-
 // Function prototypes
 /**
  * Create a nix_flake_settings initialized with default values.
@@ -510,7 +509,6 @@ nix_err nix_lock_file_inputs_iterator_get_original_ref(
  * @param[in] iter The iterator to free
  */
 void nix_lock_file_inputs_iterator_free(nix_lock_file_inputs_iterator * iter);
-
 #ifdef __cplusplus
 } // extern "C"
 #endif
