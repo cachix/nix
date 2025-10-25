@@ -30,6 +30,7 @@
   nix-main-c,
 
   nix-cmd,
+  nix-cmd-c,
 
   nix-nswrapper,
 
@@ -64,6 +65,7 @@ let
       nix-main
       nix-main-c
       nix-cmd
+      nix-cmd-c
       ;
   }
   //
