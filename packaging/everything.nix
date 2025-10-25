@@ -30,6 +30,7 @@
   nix-main-c,
 
   nix-cmd,
+  nix-cmd-c,
 
   nix-cli,
 
@@ -62,6 +63,7 @@ let
       nix-main
       nix-main-c
       nix-cmd
+      nix-cmd-c
       ;
   }
   //
