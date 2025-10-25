@@ -30,3 +30,28 @@ struct nix_locked_flake
 {
     nix::ref<nix::flake::LockedFlake> lockedFlake;
 };
+
+struct nix_flake_input
+{
+    nix::flake::FlakeInput input;
+};
+
+struct nix_flake_inputs
+{
+    nix::flake::FlakeInputs inputs;
+};
+
+struct nix_lock_file
+{
+    nix::flake::LockFile lockFile;
+};
+
+struct nix_lock_file_inputs_iterator
+{
+    // Map of all inputs from the lock file
+    std::map<nix::flake::InputAttrPath, nix::flake::Node::Edge> allInputs;
+    // Current position in the map
+    std::map<nix::flake::InputAttrPath, nix::flake::Node::Edge>::iterator current;
+    // Whether current is valid
+    bool valid;
+};
