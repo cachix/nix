@@ -399,6 +399,40 @@ nix_lock_file * nix_flake_lock_inputs(
     nix_lock_file * oldLockFile,
     nix_flake_lock_flags * flags);
 
+/**
+ * @brief Compare two lock files for equality
+ * @param[out] context Optional, stores error information
+ * @param[in] lock_file_a The first lock file to compare
+ * @param[in] lock_file_b The second lock file to compare
+ * @param[out] are_equal Set to true if the lock files are equal, false otherwise
+ * @return NIX_OK on success, NIX_ERR on failure
+ */
+nix_err nix_lock_file_equals(
+    nix_c_context * context,
+    nix_lock_file * lock_file_a,
+    nix_lock_file * lock_file_b,
+    bool * are_equal);
+
+/**
+ * @brief Generate a human-readable diff between two lock files
+ *
+ * Shows which inputs were added, removed, or updated between the old and new
+ * lock files with colored ANSI output.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] old_lock_file The old lock file (baseline for comparison)
+ * @param[in] new_lock_file The new lock file to compare against
+ * @param[in] callback Called with the diff string
+ * @param[in] user_data Optional data passed to the callback
+ * @return NIX_OK on success, NIX_ERR on failure
+ */
+nix_err nix_lock_file_diff(
+    nix_c_context * context,
+    nix_lock_file * old_lock_file,
+    nix_lock_file * new_lock_file,
+    nix_get_string_callback callback,
+    void * user_data);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

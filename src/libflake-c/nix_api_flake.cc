@@ -338,4 +338,33 @@ nix_lock_file * nix_flake_lock_inputs(
     NIXC_CATCH_ERRS_NULL
 }
 
+nix_err nix_lock_file_equals(
+    nix_c_context * context,
+    nix_lock_file * lock_file_a,
+    nix_lock_file * lock_file_b,
+    bool * are_equal)
+{
+    nix_clear_err(context);
+    try {
+        *are_equal = (lock_file_a->lockFile == lock_file_b->lockFile);
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_lock_file_diff(
+    nix_c_context * context,
+    nix_lock_file * old_lock_file,
+    nix_lock_file * new_lock_file,
+    nix_get_string_callback callback,
+    void * user_data)
+{
+    nix_clear_err(context);
+    try {
+        std::string diff = nix::flake::LockFile::diff(old_lock_file->lockFile, new_lock_file->lockFile);
+        return call_nix_get_string_callback(diff, callback, user_data);
+    }
+    NIXC_CATCH_ERRS
+}
+
 } // extern "C"
