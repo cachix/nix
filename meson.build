@@ -25,6 +25,7 @@ subproject('libfetchers-c')
 subproject('libexpr-c')
 subproject('libflake-c')
 subproject('libmain-c')
+subproject('libcmd-c')
 
 # Executables
 subproject('nix')

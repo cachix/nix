@@ -398,6 +398,7 @@
               "nix-main-c" = { };
 
               "nix-cmd" = { };
+              "nix-cmd-c" = { };
 
               "nix-nswrapper" = {
                 linuxOnly = true;
