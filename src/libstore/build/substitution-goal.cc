@@ -60,7 +60,7 @@ Goal::Co PathSubstitutionGoal::init()
         throw Error(
             "cannot substitute path '%s' - no write access to the Nix store", worker.store.printStorePath(storePath));
 
-    auto subs = settings.useSubstitutes ? getDefaultSubstituters() : std::list<ref<Store>>();
+    auto subs = settings.useSubstitutes ? worker.store.getSubstituters() : std::list<ref<Store>>();
 
     bool substituterFailed = false;
     std::optional<Error> lastStoresException = std::nullopt;

@@ -405,7 +405,7 @@ void Store::querySubstitutablePathInfos(const StorePathCAMap & paths, Substituta
 
     for (auto & path : paths) {
         std::optional<Error> lastStoresException = std::nullopt;
-        for (auto & sub : getDefaultSubstituters()) {
+        for (auto & sub : this->getSubstituters()) {
             if (lastStoresException.has_value()) {
                 logError(lastStoresException->info());
                 lastStoresException.reset();
@@ -1201,6 +1201,85 @@ void Store::signRealisation(Realisation & realisation)
         LocalSigner signer(std::move(secretKey));
         realisation.sign(signer);
     }
+}
+
+void Store::initSubstituters() const
+{
+    auto lock = std::lock_guard(substituters_mutex);
+
+    if (substituters_initialized)
+        return;
+
+    // Initialize from the global default substituters list
+    substituters = getDefaultSubstituters();
+    substituters_initialized = true;
+}
+
+std::list<ref<Store>> Store::getSubstituters() const
+{
+    if (!substituters_initialized)
+        initSubstituters();
+
+    auto lock = std::lock_guard(substituters_mutex);
+    return substituters;
+}
+
+bool Store::addSubstituter(const std::string & uri)
+{
+    // Ensure initialized first
+    if (!substituters_initialized)
+        initSubstituters();
+
+    auto lock = std::lock_guard(substituters_mutex);
+
+    // Check if already present
+    for (const auto & sub : substituters) {
+        if (sub->config.getHumanReadableURI() == uri) {
+            logWarning({.msg = HintFmt("Substituter '%1%' is already present in the substituters list", uri)});
+            return false;
+        }
+    }
+
+    try {
+        auto newStore = openStore(uri);
+        substituters.push_back(newStore);
+
+        // Re-sort by priority
+        substituters.sort([](const ref<Store> & a, const ref<Store> & b) {
+            return a->config.priority < b->config.priority;
+        });
+
+        debug("Added substituter '%s'", uri);
+        return true;
+    } catch (Error & e) {
+        logError(e.info());
+        return false;
+    }
+}
+
+bool Store::removeSubstituter(const std::string & uri)
+{
+    auto lock = std::lock_guard(substituters_mutex);
+
+    auto it = substituters.begin();
+    while (it != substituters.end()) {
+        if ((*it)->config.getHumanReadableURI() == uri) {
+            debug("Removed substituter '%s'", uri);
+            substituters.erase(it);
+            return true;
+        }
+        ++it;
+    }
+
+    logWarning({.msg = HintFmt("Substituter '%1%' not found", uri)});
+    return false;
+}
+
+void Store::clearSubstituters()
+{
+    auto lock = std::lock_guard(substituters_mutex);
+    substituters.clear();
+    debug("Cleared all substituters");
 }
 
 } // namespace nix
