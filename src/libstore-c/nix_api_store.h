@@ -15,6 +15,8 @@
 #include "nix_api_store/store_path.h"
 #include "nix_api_store/derivation.h"
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -282,6 +284,202 @@ StorePath * nix_store_query_path_from_hash_part(nix_c_context * context, Store *
  */
 nix_err nix_store_copy_path(
     nix_c_context * context, Store * srcStore, Store * dstStore, const StorePath * path, bool repair, bool checkSigs);
+
+/**
+ * @brief Add a substituter to a store at runtime.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @param[in] uri The substituter URI (e.g., "https://cache.nixos.org")
+ * @return NIX_OK on success, or an error code on failure
+ */
+nix_err nix_store_add_substituter(nix_c_context * context, Store * store, const char * uri);
+
+/**
+ * @brief Remove a substituter from a store.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @param[in] uri The substituter URI to remove
+ * @return NIX_OK on success, or NIX_ERR_KEY if not found
+ */
+nix_err nix_store_remove_substituter(nix_c_context * context, Store * store, const char * uri);
+
+/**
+ * @brief Callback type for listing substituters
+ *
+ * @param[in] uri The substituter URI
+ * @param[in] priority The priority value of this substituter
+ * @param[in] user_data User-provided data passed to nix_store_list_substituters
+ */
+typedef void (*nix_substituter_callback)(const char * uri, int priority, void * user_data);
+
+/**
+ * @brief Get all substituters for a store.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @param[in] callback Function called for each substituter
+ * @param[in] user_data Data passed to callback
+ * @return NIX_OK on success, or an error code
+ */
+nix_err nix_store_list_substituters(
+    nix_c_context * context, Store * store, nix_substituter_callback callback, void * user_data);
+
+/**
+ * @brief Clear all substituters from a store.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @return NIX_OK on success
+ */
+nix_err nix_store_clear_substituters(nix_c_context * context, Store * store);
+
+/**
+ * @brief Add a permanent GC root for a store path.
+ *
+ * Creates a symlink at `gc_root` that points to `path`, and registers it as
+ * a GC root so the path will not be garbage collected.
+ *
+ * This only works with LocalFSStore or derived store types.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference (must be a local filesystem store)
+ * @param[in] path The store path to root
+ * @param[in] gc_root The filesystem path where the GC root symlink will be created
+ * @return NIX_OK on success, or an error code on failure
+ */
+nix_err nix_store_add_perm_root(nix_c_context * context, Store * store, StorePath * path, const char * gc_root);
+
+/**
+ * @brief Add an indirect GC root for a store path.
+ *
+ * Adds an indirect (weak) reference GC root that points to `symlink_path`.
+ * This is used internally by `nix_store_add_perm_root` on stores that support it.
+ *
+ * This only works with IndirectRootStore or LocalStore (stores that support indirect roots).
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference (must support indirect roots)
+ * @param[in] symlink_path The filesystem path to the symlink created by add_perm_root
+ * @return NIX_OK on success, or an error code on failure
+ */
+nix_err nix_store_add_indirect_root(nix_c_context * context, Store * store, const char * symlink_path);
+
+/**
+ * @brief Delete a store path.
+ *
+ * Deletes the store path and all its contents. The path must be unreachable
+ * (i.e., not referenced by any GC root).
+ *
+ * This only works with LocalStore.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference (must be LocalStore)
+ * @param[in] path The store path to delete (filesystem path)
+ * @param[out] bytes_freed Pointer to uint64_t that will be set to the number of bytes freed.
+ *                         Can be NULL if you don't care about this information.
+ * @return NIX_OK on success, or an error code on failure
+ */
+nix_err nix_store_delete_path(nix_c_context * context, Store * store, const char * path, uint64_t * bytes_freed);
+
+/**
+ * @brief Garbage collection action types
+ *
+ * Specifies what the garbage collection operation should do.
+ */
+typedef enum {
+    /** Return the set of live paths (reachable from roots) */
+    NIX_GC_RETURN_LIVE,
+    /** Return the set of dead paths (not reachable from roots) */
+    NIX_GC_RETURN_DEAD,
+    /** Delete all dead paths */
+    NIX_GC_DELETE_DEAD,
+    /** Delete only the specific paths provided (if they are dead) */
+    NIX_GC_DELETE_SPECIFIC,
+} nix_gc_action;
+
+/**
+ * @brief Callback for iterating over store paths
+ *
+ * Called once for each store path in a result set.
+ *
+ * @param[in] path The store path
+ * @param[in] user_data User-provided data passed to the function
+ */
+typedef void (*nix_store_path_callback)(const StorePath * path, void * user_data);
+
+/**
+ * @brief Compute the filesystem closure of store paths.
+ *
+ * The closure is the set of all paths reachable from the input paths
+ * through references. This function is useful for determining all dependencies
+ * of given paths before performing operations on them.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @param[in] paths Array of starting store paths (cannot be NULL if num_paths > 0)
+ * @param[in] num_paths Number of paths in the array
+ * @param[in] flip_direction If true, compute reverse dependencies (dependents) instead of forward
+ * @param[in] include_outputs If true, include outputs of derivations
+ * @param[in] include_derivers If true, include derivers of store paths
+ * @param[in] callback Function called for each path in the computed closure
+ * @param[in] user_data Arbitrary data passed to the callback
+ * @return NIX_OK on success, error code on failure
+ */
+nix_err nix_store_compute_fs_closure(
+    nix_c_context * context,
+    Store * store,
+    StorePath ** paths,
+    size_t num_paths,
+    bool flip_direction,
+    bool include_outputs,
+    bool include_derivers,
+    nix_store_path_callback callback,
+    void * user_data);
+
+/**
+ * @brief Perform garbage collection on the store.
+ *
+ * This function provides flexible garbage collection with different modes:
+ * - NIX_GC_RETURN_LIVE: Returns paths reachable from GC roots (live paths)
+ * - NIX_GC_RETURN_DEAD: Returns paths not reachable from GC roots (dead paths)
+ * - NIX_GC_DELETE_DEAD: Deletes all dead paths
+ * - NIX_GC_DELETE_SPECIFIC: Deletes specific paths from the `paths_to_delete` array,
+ *   but only if they are not reachable from GC roots (respects liveness)
+ *
+ * When `ignore_liveness` is true, safety checks are bypassed (dangerous!).
+ *
+ * This only works with GcStore implementations (e.g., LocalStore).
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference (must support GC)
+ * @param[in] action The garbage collection action to perform
+ * @param[in] paths_to_delete For NIX_GC_DELETE_SPECIFIC: paths to consider for deletion.
+ *                             Can be NULL for other actions. Array is not modified.
+ * @param[in] num_paths Number of paths in paths_to_delete (0 if paths_to_delete is NULL)
+ * @param[in] ignore_liveness If true, ignore reachability from roots and delete even live paths.
+ *                            Only has effect with NIX_GC_DELETE_SPECIFIC. Dangerous!
+ * @param[in] max_freed Stop after freeing this many bytes. 0 means no limit.
+ * @param[in] callback Optional callback function called for each path in the result set
+ *                     (paths returned, deleted, or considered). Can be NULL.
+ * @param[in] user_data Arbitrary data passed to the callback
+ * @param[out] bytes_freed Optional pointer to uint64_t that will be set to the number of
+ *                         bytes freed (for delete operations) or would be freed (for return operations).
+ *                         Can be NULL if not needed.
+ * @return NIX_OK on success, error code on failure
+ */
+nix_err nix_store_collect_garbage(
+    nix_c_context * context,
+    Store * store,
+    nix_gc_action action,
+    StorePath ** paths_to_delete,
+    size_t num_paths,
+    bool ignore_liveness,
+    uint64_t max_freed,
+    nix_store_path_callback callback,
+    void * user_data,
+    uint64_t * bytes_freed);
 
 // cffi end
 #ifdef __cplusplus
