@@ -26,8 +26,8 @@ Worker::Worker(Store & store, Store & evalStore)
     , store(store)
     , evalStore(evalStore)
     , settings(nix::settings.getWorkerSettings())
-    , getSubstituters{[] {
-        return nix::settings.getWorkerSettings().useSubstitutes ? getDefaultSubstituters() : std::list<ref<Store>>{};
+    , getSubstituters{[this] {
+        return settings.useSubstitutes ? this->store.getSubstituters() : std::list<ref<Store>>{};
     }}
 {
 #ifdef _WIN32
