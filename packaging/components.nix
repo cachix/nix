@@ -415,6 +415,7 @@ in
   nix-main-c = callPackage ../src/libmain-c/package.nix { };
 
   nix-cmd = callPackage ../src/libcmd/package.nix { };
+  nix-cmd-c = callPackage ../src/libcmd-c/package.nix { };
 
   /**
     The Nix command line interface. Note that this does not include its tests, whereas `nix-everything` does.

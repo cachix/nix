@@ -28,17 +28,22 @@ subdir('nix-meson-build-support/subprojects')
 subdir('nix-meson-build-support/common')
 
 sources = files(
+  'nix_api_build_env.cc',
   'nix_api_store.cc',
 )
 
 include_dirs = [ include_directories('.') ]
 
 headers = files(
+  'nix_api_build_env.h',
   'nix_api_store.h',
 )
 
 # TODO don't install this once tests don't use it and/or move the header into `libstore`, non-`c`
-headers += files('nix_api_store_internal.h')
+headers += files(
+  'nix_api_build_env_internal.h',
+  'nix_api_store_internal.h',
+)
 
 subdir('nix-meson-build-support/export-all-symbols')
 subdir('nix-meson-build-support/windows-version')
