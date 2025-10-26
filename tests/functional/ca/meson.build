@@ -10,6 +10,7 @@ suites += {
     'concurrent-builds.sh',
     'derivation-advanced-attributes.sh',
     'derivation-json.sh',
+    'develop-input-addressed.sh',
     'duplicate-realisation-in-closure.sh',
     'eval-store.sh',
     'gc.sh',
