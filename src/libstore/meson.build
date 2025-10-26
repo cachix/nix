@@ -182,6 +182,7 @@ generated_headers = []
 foreach header : [
   'schema.sql',
   'ca-specific-schema.sql',
+  'get-env.sh',
 ]
   generated_headers += gen_header.process(header)
 endforeach
@@ -282,6 +283,7 @@ subdir('nix-meson-build-support/common')
 
 sources = files(
   'binary-cache-store.cc',
+  'build-environment.cc',
   'build-result.cc',
   'build/build-log.cc',
   'build/derivation-builder.cc',
