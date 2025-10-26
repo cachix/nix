@@ -297,6 +297,7 @@ subdir('nix-meson-build-support/asan-options')
 sources = files(
   'aws-creds.cc',
   'binary-cache-store.cc',
+  'build-environment.cc',
   'build-result.cc',
   'build/derivation-building-goal.cc',
   'build/derivation-check.cc',
