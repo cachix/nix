@@ -7,6 +7,9 @@
 #include "nix/store/store-api.hh"
 #include "nix/store/store-open.hh"
 #include "nix/store/build-result.hh"
+#include "nix/store/local-fs-store.hh"
+#include "nix/store/indirect-root-store.hh"
+#include "nix/store/local-store.hh"
 
 #include "nix/store/globals.hh"
 
@@ -252,6 +255,126 @@ nix_err nix_store_copy_closure(nix_c_context * context, Store * srcStore, Store 
         nix::RealisedPath::Set paths;
         paths.insert(path->path);
         nix::copyClosure(*srcStore->ptr, *dstStore->ptr, paths);
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_store_add_substituter(nix_c_context * context, Store * store, const char * uri)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store || !uri)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        bool success = store->ptr->addSubstituter(uri);
+        return success ? NIX_OK : NIX_ERR_UNKNOWN;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_store_remove_substituter(nix_c_context * context, Store * store, const char * uri)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store || !uri)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        bool success = store->ptr->removeSubstituter(uri);
+        return success ? NIX_OK : NIX_ERR_KEY;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_store_list_substituters(
+    nix_c_context * context, Store * store, nix_substituter_callback callback, void * user_data)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store || !callback)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        auto subs = store->ptr->getSubstituters();
+        for (const auto & sub : subs) {
+            auto uri = sub->config.getHumanReadableURI();
+            callback(uri.c_str(), sub->config.priority, user_data);
+        }
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_store_clear_substituters(nix_c_context * context, Store * store)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        store->ptr->clearSubstituters();
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_store_add_perm_root(nix_c_context * context, Store * store, StorePath * path, const char * gc_root)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store || !path || !gc_root)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        auto localFSStore = dynamic_cast<nix::LocalFSStore *>(&*store->ptr);
+        if (!localFSStore)
+            throw nix::Unsupported("Store does not support permanent GC roots (not a LocalFSStore)");
+
+        localFSStore->addPermRoot(path->path, gc_root);
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_store_add_indirect_root(nix_c_context * context, Store * store, const char * symlink_path)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store || !symlink_path)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        auto indirectRootStore = dynamic_cast<nix::IndirectRootStore *>(&*store->ptr);
+        if (!indirectRootStore)
+            throw nix::Unsupported("Store does not support indirect GC roots (not an IndirectRootStore)");
+
+        indirectRootStore->addIndirectRoot(symlink_path);
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_store_delete_path(nix_c_context * context, Store * store, const char * path, uint64_t * bytes_freed)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store || !path)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        auto localStore = dynamic_cast<nix::LocalStore *>(&*store->ptr);
+        if (!localStore)
+            throw nix::Unsupported("Store does not support deleteStorePath (not a LocalStore)");
+
+        uint64_t freed = 0;
+        localStore->deleteStorePath(path, freed);
+
+        if (bytes_freed)
+            *bytes_freed = freed;
+
+        return NIX_OK;
     }
     NIXC_CATCH_ERRS
 }

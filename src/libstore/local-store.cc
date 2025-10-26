@@ -916,7 +916,7 @@ StorePathSet LocalStore::querySubstitutablePaths(const StorePathSet & paths)
 
     StorePathSet res;
 
-    for (auto & sub : getDefaultSubstituters()) {
+    for (auto & sub : this->getSubstituters()) {
         if (remaining.empty())
             break;
         if (sub->storeDir != storeDir)

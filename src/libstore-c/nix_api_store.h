@@ -13,6 +13,7 @@
 
 #include "nix_api_util.h"
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -275,6 +276,104 @@ nix_err nix_store_get_fs_closure(
     bool include_derivers,
     void * userdata,
     void (*callback)(nix_c_context * context, void * userdata, const StorePath * store_path));
+
+/**
+ * @brief Add a substituter to a store at runtime.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @param[in] uri The substituter URI (e.g., "https://cache.nixos.org")
+ * @return NIX_OK on success, or an error code on failure
+ */
+nix_err nix_store_add_substituter(nix_c_context * context, Store * store, const char * uri);
+
+/**
+ * @brief Remove a substituter from a store.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @param[in] uri The substituter URI to remove
+ * @return NIX_OK on success, or NIX_ERR_KEY if not found
+ */
+nix_err nix_store_remove_substituter(nix_c_context * context, Store * store, const char * uri);
+
+/**
+ * @brief Callback type for listing substituters
+ *
+ * @param[in] uri The substituter URI
+ * @param[in] priority The priority value of this substituter
+ * @param[in] user_data User-provided data passed to nix_store_list_substituters
+ */
+typedef void (*nix_substituter_callback)(const char * uri, int priority, void * user_data);
+
+/**
+ * @brief Get all substituters for a store.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @param[in] callback Function called for each substituter
+ * @param[in] user_data Data passed to callback
+ * @return NIX_OK on success, or an error code
+ */
+nix_err nix_store_list_substituters(
+    nix_c_context * context, Store * store, nix_substituter_callback callback, void * user_data);
+
+/**
+ * @brief Clear all substituters from a store.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @return NIX_OK on success
+ */
+nix_err nix_store_clear_substituters(nix_c_context * context, Store * store);
+
+/**
+ * @brief Add a permanent GC root for a store path.
+ *
+ * Creates a symlink at `gc_root` that points to `path`, and registers it as
+ * a GC root so the path will not be garbage collected.
+ *
+ * This only works with LocalFSStore or derived store types.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference (must be a local filesystem store)
+ * @param[in] path The store path to root
+ * @param[in] gc_root The filesystem path where the GC root symlink will be created
+ * @return NIX_OK on success, or an error code on failure
+ */
+nix_err nix_store_add_perm_root(nix_c_context * context, Store * store, StorePath * path, const char * gc_root);
+
+/**
+ * @brief Add an indirect GC root for a store path.
+ *
+ * Adds an indirect (weak) reference GC root that points to `symlink_path`.
+ * This is used internally by `nix_store_add_perm_root` on stores that support it.
+ *
+ * This only works with IndirectRootStore or LocalStore (stores that support indirect roots).
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference (must support indirect roots)
+ * @param[in] symlink_path The filesystem path to the symlink created by add_perm_root
+ * @return NIX_OK on success, or an error code on failure
+ */
+nix_err nix_store_add_indirect_root(nix_c_context * context, Store * store, const char * symlink_path);
+
+/**
+ * @brief Delete a store path.
+ *
+ * Deletes the store path and all its contents. The path must be unreachable
+ * (i.e., not referenced by any GC root).
+ *
+ * This only works with LocalStore.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference (must be LocalStore)
+ * @param[in] path The store path to delete (filesystem path)
+ * @param[out] bytes_freed Pointer to uint64_t that will be set to the number of bytes freed.
+ *                         Can be NULL if you don't care about this information.
+ * @return NIX_OK on success, or an error code on failure
+ */
+nix_err nix_store_delete_path(nix_c_context * context, Store * store, const char * path, uint64_t * bytes_freed);
 
 // cffi end
 #ifdef __cplusplus

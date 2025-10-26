@@ -314,6 +314,13 @@ protected:
 
     std::shared_ptr<NarInfoDiskCache> diskCache;
 
+    // Dynamic substituters support
+    mutable std::mutex substituters_mutex;
+    mutable std::list<ref<Store>> substituters;
+    mutable bool substituters_initialized = false;
+
+    void initSubstituters() const;
+
     Store(const Store::Config & config);
 
 public:
@@ -901,8 +908,36 @@ public:
     }
 
     /**
+     * Get the list of substituters for this store.
+     * This is a per-store instance method, not static.
+     * Thread-safe.
+     */
+    std::list<ref<Store>> getSubstituters() const;
+
+    /**
+     * Add a substituter to this store at runtime.
+     *
+     * @param uri The URI of the substituter store
+     * @return true if added successfully, false if already present
+     */
+    bool addSubstituter(const std::string & uri);
+
+    /**
+     * Remove a substituter from this store at runtime.
+     *
+     * @param uri The URI of the substituter to remove
+     * @return true if removed, false if not found
+     */
+    bool removeSubstituter(const std::string & uri);
+
+    /**
+     * Clear all substituters from this store.
+     */
+    void clearSubstituters();
+
+    /**
      * Synchronises the options of the client with those of the daemon
-     * (a no-op when there’s no daemon)
+     * (a no-op when there's no daemon)
      */
     virtual void setOptions() {}
 

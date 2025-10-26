@@ -25,7 +25,7 @@ Goal::Co DrvOutputSubstitutionGoal::init()
         co_return amDone(ecSuccess);
     }
 
-    auto subs = settings.useSubstitutes ? getDefaultSubstituters() : std::list<ref<Store>>();
+    auto subs = settings.useSubstitutes ? worker.store.getSubstituters() : std::list<ref<Store>>();
 
     bool substituterFailed = false;
 
