@@ -250,7 +250,7 @@ MissingPaths Store::queryMissing(const std::vector<DerivedPath> & targets)
                                 continue;
 
                             bool found = false;
-                            for (auto & sub : getDefaultSubstituters()) {
+                            for (auto & sub : this->getSubstituters()) {
                                 /* TODO: Asyncify this. */
                                 auto realisation = sub->queryRealisation({drvPath, outputName});
                                 if (!realisation)

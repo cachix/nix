@@ -492,7 +492,7 @@ StorePathSet Store::querySubstitutablePaths(const StorePathSet & paths)
 
     StorePathSet res;
 
-    for (auto & sub : getDefaultSubstituters()) {
+    for (auto & sub : this->getSubstituters()) {
         if (remaining.empty())
             break;
         if (sub->storeDir != storeDir)
@@ -1285,6 +1285,81 @@ const std::filesystem::path & StoreConfig::getLogDir() const
             .value();
     }();
     return logDir;
+}
+
+void Store::initSubstituters() const
+{
+    auto lock = std::lock_guard(substituters_mutex);
+
+    if (substituters_initialized)
+        return;
+
+    substituters = getDefaultSubstituters();
+    substituters_initialized = true;
+}
+
+std::list<ref<Store>> Store::getSubstituters() const
+{
+    if (!substituters_initialized)
+        initSubstituters();
+
+    auto lock = std::lock_guard(substituters_mutex);
+    return substituters;
+}
+
+bool Store::addSubstituter(const std::string & uri)
+{
+    if (!substituters_initialized)
+        initSubstituters();
+
+    auto lock = std::lock_guard(substituters_mutex);
+
+    for (const auto & sub : substituters) {
+        if (sub->config.getHumanReadableURI() == uri) {
+            logWarning({.msg = HintFmt("Substituter '%1%' is already present in the substituters list", uri)});
+            return false;
+        }
+    }
+
+    try {
+        auto newStore = openStore(uri);
+        substituters.push_back(newStore);
+
+        substituters.sort([](const ref<Store> & a, const ref<Store> & b) {
+            return a->config.priority < b->config.priority;
+        });
+
+        debug("Added substituter '%s'", uri);
+        return true;
+    } catch (Error & e) {
+        logError(e.info());
+        return false;
+    }
+}
+
+bool Store::removeSubstituter(const std::string & uri)
+{
+    auto lock = std::lock_guard(substituters_mutex);
+
+    auto it = substituters.begin();
+    while (it != substituters.end()) {
+        if ((*it)->config.getHumanReadableURI() == uri) {
+            debug("Removed substituter '%s'", uri);
+            substituters.erase(it);
+            return true;
+        }
+        ++it;
+    }
+
+    logWarning({.msg = HintFmt("Substituter '%1%' not found", uri)});
+    return false;
+}
+
+void Store::clearSubstituters()
+{
+    auto lock = std::lock_guard(substituters_mutex);
+    substituters.clear();
+    debug("Cleared all substituters");
 }
 
 } // namespace nix

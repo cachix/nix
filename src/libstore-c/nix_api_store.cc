@@ -12,6 +12,9 @@
 #include "nix/store/store-reference.hh"
 #include "nix/store/build-result.hh"
 #include "nix/store/local-fs-store.hh"
+#include "nix/store/indirect-root-store.hh"
+#include "nix/store/local-store.hh"
+#include "nix/store/gc-store.hh"
 #include "nix/util/base-nix-32.hh"
 
 #include "nix/store/globals.hh"
@@ -376,6 +379,255 @@ nix_err nix_store_copy_path(
         auto repairFlag = repair ? nix::RepairFlag::Repair : nix::RepairFlag::NoRepair;
         auto checkSigsFlag = checkSigs ? nix::CheckSigsFlag::CheckSigs : nix::CheckSigsFlag::NoCheckSigs;
         nix::copyStorePath(*srcStore->ptr, *dstStore->ptr, path->path, repairFlag, checkSigsFlag);
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_store_add_substituter(nix_c_context * context, Store * store, const char * uri)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store || !uri)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        bool success = store->ptr->addSubstituter(uri);
+        return success ? NIX_OK : NIX_ERR_UNKNOWN;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_store_remove_substituter(nix_c_context * context, Store * store, const char * uri)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store || !uri)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        bool success = store->ptr->removeSubstituter(uri);
+        return success ? NIX_OK : NIX_ERR_KEY;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_store_list_substituters(
+    nix_c_context * context, Store * store, nix_substituter_callback callback, void * user_data)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store || !callback)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        auto subs = store->ptr->getSubstituters();
+        for (const auto & sub : subs) {
+            auto uri = sub->config.getHumanReadableURI();
+            callback(uri.c_str(), sub->config.priority, user_data);
+        }
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_store_clear_substituters(nix_c_context * context, Store * store)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        store->ptr->clearSubstituters();
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_store_add_perm_root(nix_c_context * context, Store * store, StorePath * path, const char * gc_root)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store || !path || !gc_root)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        auto localFSStore = dynamic_cast<nix::LocalFSStore *>(&*store->ptr);
+        if (!localFSStore)
+            throw nix::Unsupported("Store does not support permanent GC roots (not a LocalFSStore)");
+
+        localFSStore->addPermRoot(path->path, gc_root);
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_store_add_indirect_root(nix_c_context * context, Store * store, const char * symlink_path)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store || !symlink_path)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        auto indirectRootStore = dynamic_cast<nix::IndirectRootStore *>(&*store->ptr);
+        if (!indirectRootStore)
+            throw nix::Unsupported("Store does not support indirect GC roots (not an IndirectRootStore)");
+
+        indirectRootStore->addIndirectRoot(symlink_path);
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_store_delete_path(nix_c_context * context, Store * store, const char * path, uint64_t * bytes_freed)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store || !path)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        auto localStore = dynamic_cast<nix::LocalStore *>(&*store->ptr);
+        if (!localStore)
+            throw nix::Unsupported("Store does not support deleteStorePath (not a LocalStore)");
+
+        uint64_t freed = 0;
+        localStore->deleteStorePath(path, freed, true);
+
+        if (bytes_freed)
+            *bytes_freed = freed;
+
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_store_compute_fs_closure(
+    nix_c_context * context,
+    Store * store,
+    StorePath ** paths,
+    size_t num_paths,
+    bool flip_direction,
+    bool include_outputs,
+    bool include_derivers,
+    nix_store_path_callback callback,
+    void * user_data)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        if (num_paths == 0 || !paths) {
+            // Empty input, nothing to do
+            return NIX_OK;
+        }
+
+        // Convert StorePath** array to StorePathSet
+        nix::StorePathSet startPaths;
+        for (size_t i = 0; i < num_paths; i++) {
+            if (!paths[i])
+                return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+            startPaths.insert(paths[i]->path);
+        }
+
+        // Compute the closure
+        nix::StorePathSet closure;
+        store->ptr->computeFSClosure(startPaths, closure, flip_direction, include_outputs, include_derivers);
+
+        // Invoke callback for each path in the closure
+        if (callback) {
+            for (const auto & path : closure) {
+                StorePath sp{path};
+                callback(&sp, user_data);
+            }
+        }
+
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_store_collect_garbage(
+    nix_c_context * context,
+    Store * store,
+    nix_gc_action action,
+    StorePath ** paths_to_delete,
+    size_t num_paths,
+    bool ignore_liveness,
+    uint64_t max_freed,
+    nix_store_path_callback callback,
+    void * user_data,
+    uint64_t * bytes_freed)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        // Cast to GcStore
+        auto gcStore = dynamic_cast<nix::GcStore *>(&*store->ptr);
+        if (!gcStore)
+            throw nix::Unsupported("Store does not support garbage collection");
+
+        // Build GCOptions
+        nix::GCOptions options;
+
+        // Convert nix_gc_action to GCOptions::GCAction
+        switch (action) {
+            case NIX_GC_RETURN_LIVE:
+                options.action = nix::GCOptions::gcReturnLive;
+                break;
+            case NIX_GC_RETURN_DEAD:
+                options.action = nix::GCOptions::gcReturnDead;
+                break;
+            case NIX_GC_DELETE_DEAD:
+                options.action = nix::GCOptions::gcDeleteDead;
+                break;
+            case NIX_GC_DELETE_SPECIFIC:
+                options.action = nix::GCOptions::gcDeleteSpecific;
+                break;
+            default:
+                return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+        }
+
+        options.ignoreLiveness = ignore_liveness;
+        options.maxFreed = max_freed;
+
+        // Add paths to delete if provided and action is DELETE_SPECIFIC
+        if (action == NIX_GC_DELETE_SPECIFIC) {
+            nix::GCOptions::SpecificPaths specificPaths;
+            if (num_paths > 0 && !paths_to_delete)
+                return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+            for (size_t i = 0; i < num_paths; i++) {
+                if (!paths_to_delete[i])
+                    return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+                specificPaths.paths.insert(paths_to_delete[i]->path);
+            }
+            options.pathsToDelete = std::move(specificPaths);
+        }
+
+        // Run garbage collection
+        nix::GCResults results;
+        gcStore->collectGarbage(options, results);
+
+        // Invoke callback for each path in the results
+        if (callback) {
+            for (const auto & pathStr : results.paths) {
+                auto path = store->ptr->parseStorePath(pathStr);
+                StorePath sp{path};
+                callback(&sp, user_data);
+            }
+        }
+
+        // Return bytes freed if requested
+        if (bytes_freed)
+            *bytes_freed = results.bytesFreed;
+
+        return NIX_OK;
     }
     NIXC_CATCH_ERRS
 }
