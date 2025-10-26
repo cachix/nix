@@ -417,6 +417,7 @@ in
   nix-main-c = callPackage ../src/libmain-c/package.nix { };
 
   nix-cmd = callPackage ../src/libcmd/package.nix { };
+  nix-cmd-c = callPackage ../src/libcmd-c/package.nix { };
 
   nix-nswrapper = callPackage ../src/nswrapper/package.nix { };
 
