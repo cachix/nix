@@ -85,6 +85,13 @@ typedef struct nix_flake_inputs nix_flake_inputs;
  */
 typedef struct nix_lock_file nix_lock_file;
 
+/**
+ * @brief Iterator over inputs in a lock file
+ * @see nix_lock_file_inputs_iterator_new
+ * @see nix_lock_file_inputs_iterator_free
+ */
+typedef struct nix_lock_file_inputs_iterator nix_lock_file_inputs_iterator;
+
 // Function prototypes
 /**
  * Create a nix_flake_settings initialized with default values.
@@ -432,6 +439,77 @@ nix_err nix_lock_file_diff(
     nix_lock_file * new_lock_file,
     nix_get_string_callback callback,
     void * user_data);
+
+/**
+ * @brief Create a new iterator over all inputs in a lock file
+ * @param[out] context Optional, stores error information
+ * @param[in] lockFile The lock file to iterate over
+ * @return A new iterator or NULL on failure
+ * @see nix_lock_file_inputs_iterator_free
+ */
+nix_lock_file_inputs_iterator * nix_lock_file_inputs_iterator_new(
+    nix_c_context * context,
+    nix_lock_file * lockFile);
+
+/**
+ * @brief Check if the iterator has more inputs and advance to next
+ * @param[in] iter The iterator to advance
+ * @return true if iterator now points to a valid input, false if at end
+ */
+bool nix_lock_file_inputs_iterator_next(nix_lock_file_inputs_iterator * iter);
+
+/**
+ * @brief Get the attribute path of the current input (e.g., "nixpkgs" or "nix/nixpkgs")
+ * @param[out] context Optional, stores error information
+ * @param[in] iter The iterator
+ * @param[in] callback Called with the attribute path string
+ * @param[in] user_data Optional data passed to the callback
+ * @return NIX_OK on success, NIX_ERR on failure
+ */
+nix_err nix_lock_file_inputs_iterator_get_attr_path(
+    nix_c_context * context,
+    nix_lock_file_inputs_iterator * iter,
+    nix_get_string_callback callback,
+    void * user_data);
+
+/**
+ * @brief Get the locked flake reference of the current input as a string
+ *
+ * For example: "github:NixOS/nixpkgs/6a08e6bb4e46ff7fcbb53d409b253f6bad8a28ce"
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] iter The iterator
+ * @param[in] callback Called with the locked reference string
+ * @param[in] user_data Optional data passed to the callback
+ * @return NIX_OK on success, NIX_ERR on failure
+ */
+nix_err nix_lock_file_inputs_iterator_get_locked_ref(
+    nix_c_context * context,
+    nix_lock_file_inputs_iterator * iter,
+    nix_get_string_callback callback,
+    void * user_data);
+
+/**
+ * @brief Get the original flake reference of the current input as a string
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] iter The iterator
+ * @param[in] callback Called with the original reference string
+ * @param[in] user_data Optional data passed to the callback
+ * @return NIX_OK on success, NIX_ERR on failure
+ */
+nix_err nix_lock_file_inputs_iterator_get_original_ref(
+    nix_c_context * context,
+    nix_lock_file_inputs_iterator * iter,
+    nix_get_string_callback callback,
+    void * user_data);
+
+/**
+ * @brief Free an iterator
+ * Does not fail.
+ * @param[in] iter The iterator to free
+ */
+void nix_lock_file_inputs_iterator_free(nix_lock_file_inputs_iterator * iter);
 
 #ifdef __cplusplus
 } // extern "C"
