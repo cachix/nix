@@ -367,4 +367,107 @@ nix_err nix_lock_file_diff(
     NIXC_CATCH_ERRS
 }
 
+nix_lock_file_inputs_iterator * nix_lock_file_inputs_iterator_new(
+    nix_c_context * context,
+    nix_lock_file * lockFile)
+{
+    nix_clear_err(context);
+    try {
+        auto allInputs = lockFile->lockFile.getAllInputs();
+        auto iter = new nix_lock_file_inputs_iterator{
+            .allInputs = allInputs,
+            .current = {},  // Will be set below
+            .valid = !allInputs.empty(),
+        };
+        // Initialize current to point to the struct member's begin(), not the local variable's begin()
+        iter->current = iter->allInputs.begin();
+        return iter;
+    }
+    NIXC_CATCH_ERRS_NULL
+}
+
+bool nix_lock_file_inputs_iterator_next(nix_lock_file_inputs_iterator * iter)
+{
+    if (!iter->valid) {
+        return false;
+    }
+    ++iter->current;
+    iter->valid = (iter->current != iter->allInputs.end());
+    return iter->valid;
+}
+
+nix_err nix_lock_file_inputs_iterator_get_attr_path(
+    nix_c_context * context,
+    nix_lock_file_inputs_iterator * iter,
+    nix_get_string_callback callback,
+    void * user_data)
+{
+    nix_clear_err(context);
+    if (!iter->valid) {
+        return nix_set_err_msg(context, NIX_ERR_UNKNOWN, "Iterator is not valid");
+    }
+    try {
+        std::string attrPath = nix::flake::printInputAttrPath(iter->current->first);
+        return call_nix_get_string_callback(attrPath, callback, user_data);
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_lock_file_inputs_iterator_get_locked_ref(
+    nix_c_context * context,
+    nix_lock_file_inputs_iterator * iter,
+    nix_get_string_callback callback,
+    void * user_data)
+{
+    nix_clear_err(context);
+    if (!iter->valid) {
+        return nix_set_err_msg(context, NIX_ERR_UNKNOWN, "Iterator is not valid");
+    }
+    try {
+        const auto & edge = iter->current->second;
+
+        // Edge is a variant of either LockedNode ref or InputAttrPath
+        if (auto lockedNode = std::get_if<nix::ref<nix::flake::LockedNode>>(&edge)) {
+            // Get the locked reference string
+            std::string refStr = (*lockedNode)->lockedRef.to_string();
+            return call_nix_get_string_callback(refStr, callback, user_data);
+        } else {
+            // It's an InputAttrPath (follows input), return empty or the path
+            return call_nix_get_string_callback("", callback, user_data);
+        }
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_lock_file_inputs_iterator_get_original_ref(
+    nix_c_context * context,
+    nix_lock_file_inputs_iterator * iter,
+    nix_get_string_callback callback,
+    void * user_data)
+{
+    nix_clear_err(context);
+    if (!iter->valid) {
+        return nix_set_err_msg(context, NIX_ERR_UNKNOWN, "Iterator is not valid");
+    }
+    try {
+        const auto & edge = iter->current->second;
+
+        // Edge is a variant of either LockedNode ref or InputAttrPath
+        if (auto lockedNode = std::get_if<nix::ref<nix::flake::LockedNode>>(&edge)) {
+            // Get the original reference string
+            std::string refStr = (*lockedNode)->originalRef.to_string();
+            return call_nix_get_string_callback(refStr, callback, user_data);
+        } else {
+            // It's an InputAttrPath (follows input), return empty
+            return call_nix_get_string_callback("", callback, user_data);
+        }
+    }
+    NIXC_CATCH_ERRS
+}
+
+void nix_lock_file_inputs_iterator_free(nix_lock_file_inputs_iterator * iter)
+{
+    delete iter;
+}
+
 } // extern "C"
