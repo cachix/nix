@@ -377,6 +377,22 @@ nix_err nix_store_add_indirect_root(nix_c_context * context, Store * store, cons
 nix_err nix_store_delete_path(nix_c_context * context, Store * store, const char * path, uint64_t * bytes_freed);
 
 /**
+ * @brief Garbage collection action types
+ *
+ * Specifies what the garbage collection operation should do.
+ */
+typedef enum {
+    /** Return the set of live paths (reachable from roots) */
+    NIX_GC_RETURN_LIVE,
+    /** Return the set of dead paths (not reachable from roots) */
+    NIX_GC_RETURN_DEAD,
+    /** Delete all dead paths */
+    NIX_GC_DELETE_DEAD,
+    /** Delete only the specific paths provided (if they are dead) */
+    NIX_GC_DELETE_SPECIFIC,
+} nix_gc_action;
+
+/**
  * @brief Callback for iterating over store paths
  *
  * Called once for each store path in a result set.
@@ -414,6 +430,49 @@ nix_err nix_store_compute_fs_closure(
     bool include_derivers,
     nix_store_path_callback callback,
     void * user_data);
+
+/**
+ * @brief Perform garbage collection on the store.
+ *
+ * This function provides flexible garbage collection with different modes:
+ * - NIX_GC_RETURN_LIVE: Returns paths reachable from GC roots (live paths)
+ * - NIX_GC_RETURN_DEAD: Returns paths not reachable from GC roots (dead paths)
+ * - NIX_GC_DELETE_DEAD: Deletes all dead paths
+ * - NIX_GC_DELETE_SPECIFIC: Deletes specific paths from the `paths_to_delete` array,
+ *   but only if they are not reachable from GC roots (respects liveness)
+ *
+ * When `ignore_liveness` is true, safety checks are bypassed (dangerous!).
+ *
+ * This only works with GcStore implementations (e.g., LocalStore).
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference (must support GC)
+ * @param[in] action The garbage collection action to perform
+ * @param[in] paths_to_delete For NIX_GC_DELETE_SPECIFIC: paths to consider for deletion.
+ *                             Can be NULL for other actions. Array is not modified.
+ * @param[in] num_paths Number of paths in paths_to_delete (0 if paths_to_delete is NULL)
+ * @param[in] ignore_liveness If true, ignore reachability from roots and delete even live paths.
+ *                            Only has effect with NIX_GC_DELETE_SPECIFIC. Dangerous!
+ * @param[in] max_freed Stop after freeing this many bytes. 0 means no limit.
+ * @param[in] callback Optional callback function called for each path in the result set
+ *                     (paths returned, deleted, or considered). Can be NULL.
+ * @param[in] user_data Arbitrary data passed to the callback
+ * @param[out] bytes_freed Optional pointer to uint64_t that will be set to the number of
+ *                         bytes freed (for delete operations) or would be freed (for return operations).
+ *                         Can be NULL if not needed.
+ * @return NIX_OK on success, error code on failure
+ */
+nix_err nix_store_collect_garbage(
+    nix_c_context * context,
+    Store * store,
+    nix_gc_action action,
+    StorePath ** paths_to_delete,
+    size_t num_paths,
+    bool ignore_liveness,
+    uint64_t max_freed,
+    nix_store_path_callback callback,
+    void * user_data,
+    uint64_t * bytes_freed);
 
 // cffi end
 #ifdef __cplusplus
