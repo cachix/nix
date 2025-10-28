@@ -13,6 +13,7 @@
 
 #include "nix_api_util.h"
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -374,6 +375,45 @@ nix_err nix_store_add_indirect_root(nix_c_context * context, Store * store, cons
  * @return NIX_OK on success, or an error code on failure
  */
 nix_err nix_store_delete_path(nix_c_context * context, Store * store, const char * path, uint64_t * bytes_freed);
+
+/**
+ * @brief Callback for iterating over store paths
+ *
+ * Called once for each store path in a result set.
+ *
+ * @param[in] path The store path
+ * @param[in] user_data User-provided data passed to the function
+ */
+typedef void (*nix_store_path_callback)(const StorePath * path, void * user_data);
+
+/**
+ * @brief Compute the filesystem closure of store paths.
+ *
+ * The closure is the set of all paths reachable from the input paths
+ * through references. This function is useful for determining all dependencies
+ * of given paths before performing operations on them.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @param[in] paths Array of starting store paths (cannot be NULL if num_paths > 0)
+ * @param[in] num_paths Number of paths in the array
+ * @param[in] flip_direction If true, compute reverse dependencies (dependents) instead of forward
+ * @param[in] include_outputs If true, include outputs of derivations
+ * @param[in] include_derivers If true, include derivers of store paths
+ * @param[in] callback Function called for each path in the computed closure
+ * @param[in] user_data Arbitrary data passed to the callback
+ * @return NIX_OK on success, error code on failure
+ */
+nix_err nix_store_compute_fs_closure(
+    nix_c_context * context,
+    Store * store,
+    StorePath ** paths,
+    size_t num_paths,
+    bool flip_direction,
+    bool include_outputs,
+    bool include_derivers,
+    nix_store_path_callback callback,
+    void * user_data);
 
 // cffi end
 #ifdef __cplusplus
