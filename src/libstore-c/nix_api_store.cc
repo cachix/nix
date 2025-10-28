@@ -427,4 +427,82 @@ nix_err nix_store_compute_fs_closure(
     NIXC_CATCH_ERRS
 }
 
+nix_err nix_store_collect_garbage(
+    nix_c_context * context,
+    Store * store,
+    nix_gc_action action,
+    StorePath ** paths_to_delete,
+    size_t num_paths,
+    bool ignore_liveness,
+    uint64_t max_freed,
+    nix_store_path_callback callback,
+    void * user_data,
+    uint64_t * bytes_freed)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        // Cast to GcStore
+        auto gcStore = dynamic_cast<nix::GcStore *>(&*store->ptr);
+        if (!gcStore)
+            throw nix::Unsupported("Store does not support garbage collection");
+
+        // Build GCOptions
+        nix::GCOptions options;
+
+        // Convert nix_gc_action to GCOptions::GCAction
+        switch (action) {
+            case NIX_GC_RETURN_LIVE:
+                options.action = nix::GCOptions::gcReturnLive;
+                break;
+            case NIX_GC_RETURN_DEAD:
+                options.action = nix::GCOptions::gcReturnDead;
+                break;
+            case NIX_GC_DELETE_DEAD:
+                options.action = nix::GCOptions::gcDeleteDead;
+                break;
+            case NIX_GC_DELETE_SPECIFIC:
+                options.action = nix::GCOptions::gcDeleteSpecific;
+                break;
+            default:
+                return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+        }
+
+        options.ignoreLiveness = ignore_liveness;
+        options.maxFreed = max_freed;
+
+        // Add paths to delete if provided and action is DELETE_SPECIFIC
+        if (action == NIX_GC_DELETE_SPECIFIC && paths_to_delete && num_paths > 0) {
+            for (size_t i = 0; i < num_paths; i++) {
+                if (!paths_to_delete[i])
+                    return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+                options.pathsToDelete.insert(paths_to_delete[i]->path);
+            }
+        }
+
+        // Run garbage collection
+        nix::GCResults results;
+        gcStore->collectGarbage(options, results);
+
+        // Invoke callback for each path in the results
+        if (callback) {
+            for (const auto & pathStr : results.paths) {
+                auto path = store->ptr->parseStorePath(pathStr);
+                StorePath sp{path};
+                callback(&sp, user_data);
+            }
+        }
+
+        // Return bytes freed if requested
+        if (bytes_freed)
+            *bytes_freed = results.bytesFreed;
+
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
 } // extern "C"
