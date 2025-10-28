@@ -10,6 +10,7 @@
 #include "nix/store/local-fs-store.hh"
 #include "nix/store/indirect-root-store.hh"
 #include "nix/store/local-store.hh"
+#include "nix/store/gc-store.hh"
 
 #include "nix/store/globals.hh"
 
@@ -335,6 +336,53 @@ nix_err nix_store_delete_path(nix_c_context * context, Store * store, const char
 
         if (bytes_freed)
             *bytes_freed = freed;
+
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_store_compute_fs_closure(
+    nix_c_context * context,
+    Store * store,
+    StorePath ** paths,
+    size_t num_paths,
+    bool flip_direction,
+    bool include_outputs,
+    bool include_derivers,
+    nix_store_path_callback callback,
+    void * user_data)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        if (num_paths == 0 || !paths) {
+            // Empty input, nothing to do
+            return NIX_OK;
+        }
+
+        // Convert StorePath** array to StorePathSet
+        nix::StorePathSet startPaths;
+        for (size_t i = 0; i < num_paths; i++) {
+            if (!paths[i])
+                return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+            startPaths.insert(paths[i]->path);
+        }
+
+        // Compute the closure
+        nix::StorePathSet closure;
+        store->ptr->computeFSClosure(startPaths, closure, flip_direction, include_outputs, include_derivers);
+
+        // Invoke callback for each path in the closure
+        if (callback) {
+            for (const auto & path : closure) {
+                StorePath sp{path};
+                callback(&sp, user_data);
+            }
+        }
 
         return NIX_OK;
     }
