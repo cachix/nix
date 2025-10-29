@@ -38,6 +38,37 @@ BuildEnvironment BuildEnvironment::parseJSON(std::string_view in)
     return fromJSON(json);
 }
 
+BuildEnvironment BuildEnvironment::fromDerivation(const Store & store, const Derivation & drv)
+{
+    BuildEnvironment res;
+
+    // Copy environment variables from the derivation
+    // All derivation env vars are treated as exported since they come from the derivation itself
+    for (const auto & [name, value] : drv.env) {
+        res.vars.insert({name, BuildEnvironment::String{.exported = true, .value = value}});
+    }
+
+    // Extract structured attributes if present
+    if (drv.structuredAttrs.has_value()) {
+        const auto & structAttrs = drv.structuredAttrs.value().structuredAttrs;
+
+        // Look for .attrs.json and .attrs.sh in the structured attributes
+        if (structAttrs.contains(".attrs.json") && structAttrs.contains(".attrs.sh")) {
+            // Both should be strings containing the respective content
+            const auto & json_val = structAttrs[".attrs.json"];
+            const auto & sh_val = structAttrs[".attrs.sh"];
+            if (json_val.is_string() && sh_val.is_string()) {
+                res.structuredAttrs = {
+                    json_val.get<std::string>(),
+                    sh_val.get<std::string>()
+                };
+            }
+        }
+    }
+
+    return res;
+}
+
 nlohmann::json BuildEnvironment::toJSON() const
 {
     auto res = nlohmann::json::object();

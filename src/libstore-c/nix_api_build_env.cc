@@ -3,6 +3,7 @@
 
 #include "nix_api_build_env.h"
 #include "nix_api_build_env_internal.h"
+#include "nix_api_store_internal.h"
 #include "nix_api_util.h"
 #include "nix_api_util_internal.h"
 
@@ -114,6 +115,27 @@ nix_err nix_build_env_get_attrs_sh(
         return call_nix_get_string_callback(attrsSh, callback, user_data);
     }
     NIXC_CATCH_ERRS
+}
+
+nix_build_env * nix_build_env_from_derivation(
+    nix_c_context * context,
+    Store * store,
+    const StorePath * drv_path)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        // Read the derivation from the store
+        auto drv = store->ptr->readDerivation(drv_path->path);
+
+        // Create a BuildEnvironment from the derivation using the new C++ method
+        auto buildEnv = nix::make_ref<nix::BuildEnvironment>(
+            nix::BuildEnvironment::fromDerivation(*store->ptr, drv)
+        );
+
+        return new nix_build_env{buildEnv};
+    }
+    NIXC_CATCH_ERRS_NULL
 }
 
 } // extern "C"
