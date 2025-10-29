@@ -15,6 +15,7 @@
  */
 
 #include "nix_api_util.h"
+#include "nix_api_store.h"
 #include <stddef.h>
 
 #ifndef __has_c_attribute
@@ -157,6 +158,24 @@ nix_err nix_build_env_get_attrs_sh(
     nix_build_env * env,
     nix_get_string_callback callback,
     void * user_data);
+
+/**
+ * @brief Extract a BuildEnvironment from a store derivation.
+ *
+ * Given a derivation store path, extract the build environment that would be
+ * applied when building that derivation. This reads the .drv file and creates
+ * a BuildEnvironment with the variables and functions defined for the build.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix store reference
+ * @param[in] drv_path The derivation store path to extract environment from
+ * @return A new BuildEnvironment extracted from the derivation, or NULL on error
+ * @see nix_build_env_free, nix_store_parse_path
+ */
+nix_build_env * nix_build_env_from_derivation(
+    nix_c_context * context,
+    Store * store,
+    const StorePath * drv_path);
 
 // cffi end
 #ifdef __cplusplus

@@ -12,6 +12,8 @@
 
 #include "nix/util/types.hh"
 #include "nix/util/strings.hh"
+#include "nix/store/store-api.hh"
+#include "nix/store/derivations.hh"
 
 namespace nix {
 
@@ -86,6 +88,20 @@ struct BuildEnvironment
      * @throws std::exception if JSON is invalid
      */
     static BuildEnvironment parseJSON(std::string_view in);
+
+    /**
+     * @brief Create a BuildEnvironment from a Derivation.
+     *
+     * Extracts environment variables and structured attributes from a derivation
+     * to create a BuildEnvironment. This is useful for getting the build environment
+     * that would be active when building a given derivation.
+     *
+     * @param store The Nix store (used for some store-specific operations)
+     * @param drv The derivation to extract the environment from
+     * @return A BuildEnvironment containing the variables and attributes from the derivation
+     * @throws Error if extraction fails
+     */
+    static BuildEnvironment fromDerivation(const Store & store, const Derivation & drv);
 
     /**
      * @brief Convert the BuildEnvironment to JSON.
