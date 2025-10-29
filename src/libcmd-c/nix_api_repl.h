@@ -121,6 +121,21 @@ nix_err nix_repl_run_simple(
     nix_valmap * extra_env,
     nix_repl_exit_status * exit_status);
 
+/**
+ * @brief Enable the debugger for an evaluation state.
+ *
+ * When the debugger is enabled, any evaluation error will automatically enter
+ * an interactive REPL where you can inspect the error context and variables.
+ * This is equivalent to the `--debugger` CLI flag.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] state The evaluation state to enable the debugger for
+ * @return NIX_OK on success, an error code otherwise
+ *
+ * @see nix_repl_run_simple
+ */
+nix_err nix_evalstate_enable_debugger(nix_c_context * context, EvalState * state);
+
 // cffi end
 #ifdef __cplusplus
 }
