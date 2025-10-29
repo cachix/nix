@@ -92,4 +92,18 @@ nix_err nix_repl_run_simple(
     NIXC_CATCH_ERRS
 }
 
+nix_err nix_evalstate_enable_debugger(nix_c_context * context, EvalState * state)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    if (state == nullptr) {
+        return NIX_OK;
+    }
+    try {
+        state->state.debugRepl = &nix::AbstractNixRepl::runSimple;
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
 } // extern "C"
