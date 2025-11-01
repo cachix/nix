@@ -5,6 +5,14 @@ if not (host_machine.system() == 'windows' and cxx.get_id() == 'gcc')
   deps_private += dependency('threads')
 endif
 
+# TBB is needed through transitive dependencies (libblake3 is compiled with TBB support).
+# In debug builds, TBB symbols aren't inlined, so we need to link it explicitly.
+# See: https://github.com/NixOS/nix/issues/13908
+if get_option('debug')
+  tbb = dependency('tbb', method : 'pkg-config')
+  deps_private += tbb
+endif
+
 if host_machine.system() == 'cygwin'
   # -std=gnu on cygwin defines 'unix', which conflicts with the namespace
   add_project_arguments(
