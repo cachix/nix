@@ -36,16 +36,21 @@ subdir('nix-meson-build-support/asan-options')
 
 sources = files(
   'nix_api_util.cc',
+  'nix_api_logger.cc',
 )
 
 include_dirs = [ include_directories('.') ]
 
 headers = files(
   'nix_api_util.h',
+  'nix_api_logger.h',
 )
 
 # TODO don't install this once tests don't use it.
-headers += files('nix_api_util_internal.h')
+headers += files(
+  'nix_api_util_internal.h',
+  'nix_api_logger_internal.h',
+)
 
 subdir('nix-meson-build-support/export-all-symbols')
 subdir('nix-meson-build-support/windows-version')
