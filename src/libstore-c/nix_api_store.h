@@ -474,6 +474,38 @@ nix_err nix_store_collect_garbage(
     void * user_data,
     uint64_t * bytes_freed);
 
+/**
+ * @brief Trust status of a client connection
+ *
+ * Indicates whether a client is trusted by the store.
+ */
+typedef enum {
+    /** Client is not trusted */
+    NIX_TRUSTED_FLAG_NOT_TRUSTED = 0,
+    /** Client is trusted */
+    NIX_TRUSTED_FLAG_TRUSTED = 1,
+    /** Trust status is not applicable or unknown */
+    NIX_TRUSTED_FLAG_UNKNOWN = 2
+} nix_trusted_flag;
+
+/**
+ * @brief Check if the client connection is trusted
+ *
+ * This is the opposite of the StoreConfig::isTrusted setting.
+ * That setting is about whether we trust the store. This method
+ * is about whether the store trusts us (the client).
+ *
+ * For LocalStore, this indicates whether the current user has elevated privileges.
+ * For RemoteStore, this reflects the daemon's trust decision based on the
+ * `trusted-users` configuration.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @return NIX_TRUSTED_FLAG_TRUSTED if trusted, NIX_TRUSTED_FLAG_NOT_TRUSTED if not,
+ *         or NIX_TRUSTED_FLAG_UNKNOWN if not applicable
+ */
+nix_trusted_flag nix_store_is_trusted_client(nix_c_context * context, Store * store);
+
 // cffi end
 #ifdef __cplusplus
 }
