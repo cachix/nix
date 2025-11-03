@@ -467,4 +467,20 @@ nix_err nix_store_collect_garbage(
     NIXC_CATCH_ERRS
 }
 
+nix_trusted_flag nix_store_is_trusted_client(nix_c_context * context, Store * store)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store)
+            return NIX_TRUSTED_FLAG_UNKNOWN;
+
+        auto result = store->ptr->isTrustedClient();
+        if (!result.has_value())
+            return NIX_TRUSTED_FLAG_UNKNOWN;
+        return result.value() ? NIX_TRUSTED_FLAG_TRUSTED : NIX_TRUSTED_FLAG_NOT_TRUSTED;
+    }
+    NIXC_CATCH_ERRS_RES(NIX_TRUSTED_FLAG_UNKNOWN)
+}
+
 } // extern "C"
