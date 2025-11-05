@@ -94,7 +94,7 @@ void nix_valmap_free(nix_valmap * map);
  * @param[out] context Optional, stores error information
  * @param[in] map The ValMap to insert into
  * @param[in] key The variable name (null-terminated string)
- * @param[in] value The Nix value to associate with the key
+ * @param[in] value The Nix value pointer to associate with the key
  * @return NIX_OK on success, an error code otherwise
  */
 nix_err nix_valmap_insert(nix_c_context * context, nix_valmap * map, const char * key, nix_value * value);

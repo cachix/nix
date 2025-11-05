@@ -58,7 +58,10 @@ nix_err nix_valmap_insert(nix_c_context * context, nix_valmap * map, const char 
         return NIX_OK;
     }
     try {
-        map->map[key] = &value->value;
+        // NOTE: The FFI layer passes a raw nix::Value* pointer cast as nix_value*
+        // We interpret it as a raw pointer and store it directly
+        auto * raw_value = reinterpret_cast<nix::Value *>(value);
+        map->map[key] = raw_value;
         return NIX_OK;
     }
     NIXC_CATCH_ERRS
