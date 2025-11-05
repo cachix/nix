@@ -918,7 +918,7 @@ ReplExitStatus AbstractNixRepl::runSimple(ref<EvalState> evalState, const ValMap
     // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDelete)
     auto repl = std::make_unique<NixRepl>(
         lookupPath,
-        openStore(),
+        evalState->store,
         evalState,
         getValues,
         /*runNix=*/nullptr);

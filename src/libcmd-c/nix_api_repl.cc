@@ -58,7 +58,10 @@ nix_err nix_valmap_insert(nix_c_context * context, nix_valmap * map, const char 
         return NIX_OK;
     }
     try {
-        map->map[key] = &value->value;
+        // NOTE: The FFI layer passes a raw nix::Value* pointer cast as nix_value*
+        // We interpret it as a raw pointer and store it directly
+        auto * raw_value = reinterpret_cast<nix::Value *>(value);
+        map->map[key] = raw_value;
         return NIX_OK;
     }
     NIXC_CATCH_ERRS
@@ -81,7 +84,12 @@ nix_err nix_repl_run_simple(
             env = extra_env->map;
         }
 
-        nix::ReplExitStatus status = nix::AbstractNixRepl::runSimple(nix::ref<nix::EvalState>(&state->state), env);
+        // SAFETY: We create a ref from a shared_ptr initialized with a raw pointer that has
+        // a custom no-op deleter to prevent double-free. The C struct EvalState
+        // contains a stack-allocated nix::EvalState which must not be deleted by shared_ptr.
+        // The C caller is responsible for keeping the EvalState valid during the REPL execution.
+        auto shared_state = std::shared_ptr<nix::EvalState>(&state->state, [](nix::EvalState*) {});
+        nix::ReplExitStatus status = nix::AbstractNixRepl::runSimple(nix::ref<nix::EvalState>(shared_state), env);
 
         if (exit_status != nullptr) {
             *exit_status = static_cast<nix_repl_exit_status>(status);
