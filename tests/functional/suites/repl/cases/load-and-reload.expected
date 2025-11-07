@@ -9,13 +9,15 @@ nix-repl> :l ./does-not-exist.nix
 error: path '/path/to/repl/suite/cases/does-not-exist.nix' does not exist
 
 nix-repl> :p fromBFails
-error:
+
        … while calling the 'throw' builtin
          at /path/to/repl/suite/cases/file-b.nix:2:16:
             1| {
             2|   fromBFails = throw "b";
              |                ^
             3|   fromB = 2;
+
+
 
        error: b
 

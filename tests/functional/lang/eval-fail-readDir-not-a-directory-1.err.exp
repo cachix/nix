@@ -1,4 +1,4 @@
-error:
+
        … while evaluating the attribute 'regularFile'
          at /pwd/lang/eval-fail-readDir-not-a-directory-1.nix:2:3:
             1| {
@@ -6,11 +6,14 @@ error:
              |   ^
             3| }
 
+
        … while calling the 'readDir' builtin
          at /pwd/lang/eval-fail-readDir-not-a-directory-1.nix:2:17:
             1| {
             2|   regularFile = builtins.readDir ./readDir/bar;
              |                 ^
             3| }
+
+
 
        error: '/pwd/lang/readDir/bar' is not a directory

@@ -1,5 +1,6 @@
-error: syntax error, unexpected '||'
-       at «stdin»:1:1:
+at «stdin»:1:1:
             1| || true
              | ^
             2|
+
+       error: syntax error, unexpected '||'

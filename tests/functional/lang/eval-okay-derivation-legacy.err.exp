@@ -1,54 +1,66 @@
-warning:
+
          … while evaluating derivation 'eval-okay-derivation-legacy'
 
-         warning: 'structuredAttrs' disables the effect of the derivation attribute 'allowedReferences'; use 'outputChecks.<output>.allowedReferences' instead
+
          at /pwd/lang/eval-okay-derivation-legacy.nix:6:3:
               5|   __structuredAttrs = true;
               6|   allowedReferences = [ ];
                |   ^
               7|   disallowedReferences = [ ];
-warning:
+
+         warning: 'structuredAttrs' disables the effect of the derivation attribute 'allowedReferences'; use 'outputChecks.<output>.allowedReferences' instead
+
          … while evaluating derivation 'eval-okay-derivation-legacy'
 
-         warning: 'structuredAttrs' disables the effect of the derivation attribute 'allowedRequisites'; use 'outputChecks.<output>.allowedRequisites' instead
+
          at /pwd/lang/eval-okay-derivation-legacy.nix:8:3:
               7|   disallowedReferences = [ ];
               8|   allowedRequisites = [ ];
                |   ^
               9|   disallowedRequisites = [ ];
-warning:
+
+         warning: 'structuredAttrs' disables the effect of the derivation attribute 'allowedRequisites'; use 'outputChecks.<output>.allowedRequisites' instead
+
          … while evaluating derivation 'eval-okay-derivation-legacy'
 
-         warning: 'structuredAttrs' disables the effect of the derivation attribute 'disallowedReferences'; use 'outputChecks.<output>.disallowedReferences' instead
+
          at /pwd/lang/eval-okay-derivation-legacy.nix:7:3:
               6|   allowedReferences = [ ];
               7|   disallowedReferences = [ ];
                |   ^
               8|   allowedRequisites = [ ];
-warning:
+
+         warning: 'structuredAttrs' disables the effect of the derivation attribute 'disallowedReferences'; use 'outputChecks.<output>.disallowedReferences' instead
+
          … while evaluating derivation 'eval-okay-derivation-legacy'
 
-         warning: 'structuredAttrs' disables the effect of the derivation attribute 'disallowedRequisites'; use 'outputChecks.<output>.disallowedRequisites' instead
+
          at /pwd/lang/eval-okay-derivation-legacy.nix:9:3:
               8|   allowedRequisites = [ ];
               9|   disallowedRequisites = [ ];
                |   ^
              10|   maxSize = 1234;
-warning:
+
+         warning: 'structuredAttrs' disables the effect of the derivation attribute 'disallowedRequisites'; use 'outputChecks.<output>.disallowedRequisites' instead
+
          … while evaluating derivation 'eval-okay-derivation-legacy'
 
-         warning: 'structuredAttrs' disables the effect of the derivation attribute 'maxClosureSize'; use 'outputChecks.<output>.maxClosureSize' instead
+
          at /pwd/lang/eval-okay-derivation-legacy.nix:11:3:
              10|   maxSize = 1234;
              11|   maxClosureSize = 12345;
                |   ^
              12| }).out
-warning:
+
+         warning: 'structuredAttrs' disables the effect of the derivation attribute 'maxClosureSize'; use 'outputChecks.<output>.maxClosureSize' instead
+
          … while evaluating derivation 'eval-okay-derivation-legacy'
 
-         warning: 'structuredAttrs' disables the effect of the derivation attribute 'maxSize'; use 'outputChecks.<output>.maxSize' instead
+
          at /pwd/lang/eval-okay-derivation-legacy.nix:10:3:
               9|   disallowedRequisites = [ ];
              10|   maxSize = 1234;
                |   ^
              11|   maxClosureSize = 12345;
+
+         warning: 'structuredAttrs' disables the effect of the derivation attribute 'maxSize'; use 'outputChecks.<output>.maxSize' instead

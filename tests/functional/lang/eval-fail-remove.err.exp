@@ -1,9 +1,10 @@
-error:
+
        … while evaluating the attribute 'body'
          at /pwd/lang/eval-fail-remove.nix:1:1:
             1| let {
              | ^
             2|   attrs = {
+
 
        … from the definition of 'body'
          at /pwd/lang/eval-fail-remove.nix:7:3:
@@ -12,6 +13,7 @@ error:
              |   ^
             8| }
 
+
        … while evaluating the attribute 'x'
          at /pwd/lang/eval-fail-remove.nix:7:10:
             6|
@@ -19,5 +21,8 @@ error:
              |          ^
             8| }
 
+
+
        error: attribute 'x' missing
+
        Did you mean y?

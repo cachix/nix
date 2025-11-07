@@ -152,10 +152,10 @@ static bool printPosMaybe(std::ostream & oss, std::string_view indent, const std
 
         if (auto loc = pos->getCodeLines()) {
             printCodeLines(oss, "", *pos, *loc);
-            oss << "\n";
+            oss << "\n\n";
         }
     } else if (printUnknownLocations) {
-        oss << "\n" << indent << ANSI_BLUE << "at " ANSI_RED << "UNKNOWN LOCATION" << ANSI_NORMAL << "\n";
+        oss << "\n" << indent << ANSI_BLUE << "at " ANSI_RED << "UNKNOWN LOCATION" << ANSI_NORMAL << "\n\n";
     }
     return hasPos;
 }
@@ -408,22 +408,27 @@ std::ostream & showErrorInfo(std::ostream & out, const ErrorInfo & einfo, bool s
                 << "\n";
         }
 
-        oss << "\n" << prefix;
+        oss << "\n\n";
     }
-
-    oss << einfo.msg << "\n";
 
     printPosMaybe(oss, "", einfo.pos);
 
+    if (einfo.noIndent)
+        oss << (prefix.ends_with(" ") ? prefix.substr(0, prefix.size() - 1) : prefix) << einfo.msg << "\n";
+    else
+        oss << prefix << einfo.msg << "\n";
+
     auto suggestions = einfo.suggestions.trim();
     if (!suggestions.suggestions.empty()) {
+        oss << "\n";
         oss << "Did you mean " << suggestions.trim() << "?" << std::endl;
+        oss << "\n";
     }
 
     if (einfo.noIndent) {
-        out << (prefix.ends_with(" ") ? prefix.substr(0, prefix.size() - 1) : prefix) << chomp(oss.str());
+        out << chomp(oss.str());
     } else {
-        out << indent(prefix, std::string(filterANSIEscapes(prefix, true).size(), ' '), chomp(oss.str()));
+        out << indent("", std::string(filterANSIEscapes(prefix, true).size(), ' '), chomp(oss.str()));
     }
 
     return out;

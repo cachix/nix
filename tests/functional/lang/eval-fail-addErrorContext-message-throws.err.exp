@@ -1,4 +1,4 @@
-error:
+
        … while evaluating the error message passed to builtins.addErrorContext, another error occurred: secondary
 
        … while calling the 'throw' builtin
@@ -7,5 +7,7 @@ error:
             3| builtins.addErrorContext (throw "secondary") (throw "important")
              |                                               ^
             4|
+
+
 
        error: important

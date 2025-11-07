@@ -1,5 +1,6 @@
-error: syntax error, unexpected '!='
-       at «stdin»:1:6:
+at «stdin»:1:6:
             1| 1 != != 2
              |      ^
             2|
+
+       error: syntax error, unexpected '!='

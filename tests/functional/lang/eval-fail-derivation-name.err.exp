@@ -1,10 +1,11 @@
-error:
+
        … while evaluating the attribute 'outPath'
          at «nix-internal»/derivation-internal.nix:<number>:<number>:
      <number>|     value = commonAttrs // {
      <number>|       outPath = strict.${outputName};
              |       ^
      <number>|       drvPath = strict.drvPath;
+
 
        … while selecting an attribute
          at «nix-internal»/derivation-internal.nix:<number>:<number>:
@@ -13,6 +14,7 @@ error:
              |                 ^
      <number>|       drvPath = strict.drvPath;
 
+
        … while calling the 'derivationStrict' builtin
          at «nix-internal»/derivation-internal.nix:<number>:<number>:
      <number>|
@@ -20,6 +22,8 @@ error:
              |            ^
      <number>|
 
+
        … while evaluating derivation '~jiggle~'
+
 
        error: invalid derivation name: name '~jiggle~' contains illegal character '~'. Please pass a different 'name'.

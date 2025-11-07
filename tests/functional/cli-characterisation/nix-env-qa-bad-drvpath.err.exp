@@ -1,4 +1,4 @@
-error:
+
        … while querying the derivation named 'bad-drvpath-1.0'
 
        … while evaluating the 'drvPath' attribute of a derivation
@@ -7,5 +7,7 @@ error:
             5|   drvPath = builtins.toFile "not-a-drv" "";
              |   ^
             6| }
+
+
 
        error: store path 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-not-a-drv' is not a valid derivation path

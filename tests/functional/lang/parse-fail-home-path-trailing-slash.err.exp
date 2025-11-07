@@ -1,5 +1,6 @@
-error: path has a trailing slash
-       at «stdin»:1:7:
+at «stdin»:1:7:
             1| ~/foo/
              |       ^
             2|
+
+       error: path has a trailing slash

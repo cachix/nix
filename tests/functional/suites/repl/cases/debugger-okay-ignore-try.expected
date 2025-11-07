@@ -32,10 +32,11 @@ Env level 1
 abort baseNameOf break builtins derivation derivationStrict dirOf false fetchGit fetchMercurial fetchTarball fetchTree fromTOML import isNull map null placeholder removeAttrs scopedImport throw toString true 
 
 nix-repl> :p bricked
-error: undefined variable 'bricked'
-       at «string»:1:1:
+at «string»:1:1:
             1| bricked
              | ^
+
+       error: undefined variable 'bricked'
 
 nix-repl> :p tried
 {
@@ -57,10 +58,11 @@ Env level 2
 abort baseNameOf break builtins derivation derivationStrict dirOf false fetchGit fetchMercurial fetchTarball fetchTree fromTOML import isNull map null placeholder removeAttrs scopedImport throw toString true 
 
 nix-repl> :p bricked
-error: infinite recursion encountered
-       at «string»:1:1:
+at «string»:1:1:
             1| bricked
              | ^
+
+       error: infinite recursion encountered
 
 nix-repl> :p tried
 {
@@ -88,10 +90,11 @@ Env level 2
 abort baseNameOf break builtins derivation derivationStrict dirOf false fetchGit fetchMercurial fetchTarball fetchTree fromTOML import isNull map null placeholder removeAttrs scopedImport throw toString true 
 
 nix-repl> :p bricked
-error: infinite recursion encountered
-       at «string»:1:1:
+at «string»:1:1:
             1| bricked
              | ^
+
+       error: infinite recursion encountered
 
 nix-repl> :p tried
 {
@@ -113,10 +116,11 @@ Env level 2
 abort baseNameOf break builtins derivation derivationStrict dirOf false fetchGit fetchMercurial fetchTarball fetchTree fromTOML import isNull map null placeholder removeAttrs scopedImport throw toString true 
 
 nix-repl> :p bricked
-error: infinite recursion encountered
-       at «string»:1:1:
+at «string»:1:1:
             1| bricked
              | ^
+
+       error: infinite recursion encountered
 
 nix-repl> :p tried
 {

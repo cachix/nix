@@ -1,4 +1,4 @@
-error:
+
        … while calling the 'seq' builtin
          at /pwd/lang/eval-fail-memoised-error-trace-not-mutated.nix:10:1:
             9| # a fresh instance of the exceptions to avoid trace mutation.
@@ -6,12 +6,14 @@ error:
              | ^
            11|
 
+
        … while calling the 'seq' builtin
          at /pwd/lang/eval-fail-memoised-error-trace-not-mutated.nix:10:36:
             9| # a fresh instance of the exceptions to avoid trace mutation.
            10| builtins.seq (builtins.tryEval b) (builtins.seq (builtins.tryEval c) d)
              |                                    ^
            11|
+
 
        … forcing d
 
@@ -23,5 +25,7 @@ error:
             2|   a = throw "nope";
              |       ^
             3|   b = builtins.addErrorContext "forcing b" a;
+
+
 
        error: nope

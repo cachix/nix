@@ -1,5 +1,6 @@
-error: syntax error, unexpected 'then'
-       at «stdin»:1:4:
+at «stdin»:1:4:
             1| if then
              |    ^
             2|
+
+       error: syntax error, unexpected 'then'
