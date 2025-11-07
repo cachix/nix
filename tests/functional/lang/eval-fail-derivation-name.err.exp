@@ -1,10 +1,11 @@
-error:
+
        … while evaluating the attribute 'outPath'
          at «nix-internal»/derivation-internal.nix:<number>:<number>:
      <number>|     value = commonAttrs // {
      <number>|       outPath = builtins.getAttr outputName strict;
              |       ^
      <number>|       drvPath = strict.drvPath;
+
 
        … while calling the 'getAttr' builtin
          at «nix-internal»/derivation-internal.nix:<number>:<number>:
@@ -13,6 +14,7 @@ error:
              |                 ^
      <number>|       drvPath = strict.drvPath;
 
+
        … while calling the 'derivationStrict' builtin
          at «nix-internal»/derivation-internal.nix:<number>:<number>:
      <number>|
@@ -20,7 +22,9 @@ error:
              |            ^
      <number>|
 
+
        … while evaluating derivation '~jiggle~'
          whose name attribute is located at /pwd/lang/eval-fail-derivation-name.nix:<number>:<number>
+
 
        error: invalid derivation name: name '~jiggle~' contains illegal character '~'. Please pass a different 'name'.

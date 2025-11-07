@@ -1,9 +1,10 @@
-error:
+
        … while evaluating the condition of the assertion '({ foo = { outPath = "/nix/store/0"; type = "derivation"; }; } == { foo = { devious = true; outPath = "/nix/store/1"; type = "derivation"; }; })'
          at /pwd/lang/eval-fail-assert-equal-derivations-extra.nix:1:1:
             1| assert
              | ^
             2|   {
+
 
        … while comparing attribute 'foo'
 
@@ -14,6 +15,7 @@ error:
              |     ^
             4|       type = "derivation";
 
+
        … where right hand side is
          at /pwd/lang/eval-fail-assert-equal-derivations-extra.nix:8:5:
             7|   } == {
@@ -21,6 +23,8 @@ error:
              |     ^
             9|       type = "derivation";
 
+
        … while comparing a derivation by its 'outPath' attribute
+
 
        error: string '"/nix/store/0"' is not equal to string '"/nix/store/1"'
