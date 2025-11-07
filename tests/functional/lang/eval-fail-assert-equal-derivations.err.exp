@@ -1,9 +1,10 @@
-error:
+
        … while evaluating the condition of the assertion '({ foo = { ignored = (abort "not ignored"); outPath = "/nix/store/0"; type = "derivation"; }; } == { foo = { ignored = (abort "not ignored"); outPath = "/nix/store/1"; type = "derivation"; }; })'
          at /pwd/lang/eval-fail-assert-equal-derivations.nix:1:1:
             1| assert
              | ^
             2|   {
+
 
        … while comparing attribute 'foo'
 
@@ -14,6 +15,7 @@ error:
              |     ^
             4|       type = "derivation";
 
+
        … where right hand side is
          at /pwd/lang/eval-fail-assert-equal-derivations.nix:9:5:
             8|   } == {
@@ -21,6 +23,8 @@ error:
              |     ^
            10|       type = "derivation";
 
+
        … while comparing a derivation by its 'outPath' attribute
+
 
        error: string '"/nix/store/0"' is not equal to string '"/nix/store/1"'

@@ -1,4 +1,4 @@
-error:
+
        … while counting down; n = 10
 
        … while counting down; n = 9
@@ -20,5 +20,6 @@ error:
        … while counting down; n = 1
 
        (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
 
        error: kaboom
