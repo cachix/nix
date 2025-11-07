@@ -274,6 +274,62 @@ nix_err nix_store_add_substituter(nix_c_context * context, Store * store, const 
     NIXC_CATCH_ERRS
 }
 
+nix_err nix_store_add_trusted_public_keys(
+    nix_c_context * context,
+    Store * store,
+    const char ** keys,
+    size_t n_keys)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        if (!keys || n_keys == 0)
+            return NIX_OK; // Nothing to add
+
+        // Convert C array to C++ Strings
+        nix::Strings keysList;
+        for (size_t i = 0; i < n_keys; ++i) {
+            if (keys[i])
+                keysList.push_back(keys[i]);
+        }
+
+        store->ptr->addTrustedPublicKeys(keysList);
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_store_remove_trusted_public_keys(
+    nix_c_context * context,
+    Store * store,
+    const char ** keys,
+    size_t n_keys)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store)
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
+
+        if (!keys || n_keys == 0)
+            return NIX_OK; // Nothing to remove
+
+        // Convert C array to C++ Strings
+        nix::Strings keysList;
+        for (size_t i = 0; i < n_keys; ++i) {
+            if (keys[i])
+                keysList.push_back(keys[i]);
+        }
+
+        store->ptr->removeTrustedPublicKeys(keysList);
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
 nix_err nix_store_remove_substituter(nix_c_context * context, Store * store, const char * uri)
 {
     if (context)

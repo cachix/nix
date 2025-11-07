@@ -923,6 +923,22 @@ public:
     bool addSubstituter(const std::string & uri);
 
     /**
+     * Add trusted public keys that will be used to verify store paths.
+     * Keys are added to the global trusted keys set.
+     *
+     * @param keys List of public keys in the format "name:base64-key"
+     * @note For RemoteStore (daemon), this requires the client to be a trusted user
+     */
+    virtual void addTrustedPublicKeys(const Strings & keys);
+
+    /**
+     * Remove trusted public keys from the trusted keys set.
+     *
+     * @param keys List of public keys to remove (matched by key name)
+     */
+    virtual void removeTrustedPublicKeys(const Strings & keys);
+
+    /**
      * Remove a substituter from this store at runtime.
      *
      * @param uri The URI of the substituter to remove

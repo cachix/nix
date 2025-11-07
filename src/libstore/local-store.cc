@@ -1029,6 +1029,26 @@ const PublicKeys & LocalStore::getPublicKeys()
     return *state->publicKeys;
 }
 
+void LocalStore::addTrustedPublicKeys(const Strings & keys)
+{
+    // Call base implementation to update config
+    Store::addTrustedPublicKeys(keys);
+
+    // Clear cached keys so they're reloaded with new keys
+    auto state(_state->lock());
+    state->publicKeys.reset();
+}
+
+void LocalStore::removeTrustedPublicKeys(const Strings & keys)
+{
+    // Call base implementation to update config
+    Store::removeTrustedPublicKeys(keys);
+
+    // Clear cached keys so they're reloaded without removed keys
+    auto state(_state->lock());
+    state->publicKeys.reset();
+}
+
 bool LocalStore::pathInfoIsUntrusted(const ValidPathInfo & info)
 {
     return config->requireSigs && !info.checkSignatures(*this, getPublicKeys());

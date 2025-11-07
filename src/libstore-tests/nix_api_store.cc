@@ -793,4 +793,69 @@ TEST_F(NixApiStoreTestWithRealisedPath, nix_store_get_fs_closure_error_propagati
     ASSERT_EQ(call_count, 1); // Should have been called exactly once, then aborted
 }
 
+TEST_F(nix_api_store_test, nix_store_add_trusted_public_keys)
+{
+    // Test adding trusted public keys
+    const char * key1 = "cache.example.com-1:1234567890abcdef1234567890abcdef1234567890ab=";
+    const char * key2 = "cache.example.com-2:abcdef1234567890abcdef1234567890abcdef1234=";
+    const char * keys[] = {key1, key2};
+
+    nix_err ret = nix_store_add_trusted_public_keys(ctx, store, keys, 2);
+    assert_ctx_ok();
+    ASSERT_EQ(ret, NIX_OK);
+}
+
+TEST_F(nix_api_store_test, nix_store_add_trusted_public_keys_empty)
+{
+    // Test adding empty keys array (should be no-op)
+    nix_err ret = nix_store_add_trusted_public_keys(ctx, store, nullptr, 0);
+    assert_ctx_ok();
+    ASSERT_EQ(ret, NIX_OK);
+}
+
+TEST_F(nix_api_store_test, nix_store_add_trusted_public_keys_null_store)
+{
+    // Test that null store is rejected
+    const char * key = "cache.example.com-1:1234567890abcdef1234567890abcdef1234567890ab=";
+    const char * keys[] = {key};
+
+    nix_err ret = nix_store_add_trusted_public_keys(ctx, nullptr, keys, 1);
+    ASSERT_EQ(ret, NIX_ERR_KEY);
+}
+
+TEST_F(nix_api_store_test, nix_store_remove_trusted_public_keys)
+{
+    // Test removing trusted public keys
+    const char * key = "cache.example.com-1:1234567890abcdef1234567890abcdef1234567890ab=";
+    const char * keys[] = {key};
+
+    // First add a key
+    nix_err ret = nix_store_add_trusted_public_keys(ctx, store, keys, 1);
+    assert_ctx_ok();
+    ASSERT_EQ(ret, NIX_OK);
+
+    // Then remove it
+    ret = nix_store_remove_trusted_public_keys(ctx, store, keys, 1);
+    assert_ctx_ok();
+    ASSERT_EQ(ret, NIX_OK);
+}
+
+TEST_F(nix_api_store_test, nix_store_trusted_keys_no_duplicates)
+{
+    // Test that adding the same key twice doesn't duplicate it
+    const char * key = "cache.example.com-1:1234567890abcdef1234567890abcdef1234567890ab=";
+    const char * keys[] = {key};
+
+    // Add key twice
+    nix_err ret = nix_store_add_trusted_public_keys(ctx, store, keys, 1);
+    assert_ctx_ok();
+    ASSERT_EQ(ret, NIX_OK);
+
+    ret = nix_store_add_trusted_public_keys(ctx, store, keys, 1);
+    assert_ctx_ok();
+    ASSERT_EQ(ret, NIX_OK);
+
+    // Should succeed - duplicates are ignored
+}
+
 } // namespace nixC
