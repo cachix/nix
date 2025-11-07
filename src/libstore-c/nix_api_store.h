@@ -289,6 +289,44 @@ nix_err nix_store_get_fs_closure(
 nix_err nix_store_add_substituter(nix_c_context * context, Store * store, const char * uri);
 
 /**
+ * @brief Add trusted public keys to the store's trusted keys set.
+ *
+ * These keys will be used globally to verify signatures on store paths.
+ * Keys are added to the existing set (append-only, no duplicates).
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @param[in] keys Array of public key strings in the format "name:base64-key"
+ * @param[in] n_keys Number of keys in the array
+ * @return NIX_OK on success, or an error code on failure
+ *
+ * @note For RemoteStore (daemon), this requires the client to be a trusted user.
+ * @note Keys are matched by name; adding a key with an existing name is a no-op.
+ */
+nix_err nix_store_add_trusted_public_keys(
+    nix_c_context * context,
+    Store * store,
+    const char ** keys,
+    size_t n_keys);
+
+/**
+ * @brief Remove trusted public keys from the store's trusted keys set.
+ *
+ * Keys are matched by name (the part before the colon).
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @param[in] keys Array of public key strings (only the name is used for matching)
+ * @param[in] n_keys Number of keys in the array
+ * @return NIX_OK on success, or an error code on failure
+ */
+nix_err nix_store_remove_trusted_public_keys(
+    nix_c_context * context,
+    Store * store,
+    const char ** keys,
+    size_t n_keys);
+
+/**
  * @brief Remove a substituter from a store.
  *
  * @param[out] context Optional, stores error information

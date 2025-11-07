@@ -1257,6 +1257,82 @@ bool Store::addSubstituter(const std::string & uri)
     }
 }
 
+void Store::addTrustedPublicKeys(const Strings & keys)
+{
+    if (keys.empty()) return;
+
+    auto currentKeys = settings.trustedPublicKeys.get();
+
+    // Add new keys, avoiding duplicates by checking key names
+    for (const auto & keyStr : keys) {
+        try {
+            PublicKey newKey(keyStr);
+
+            // Check if a key with this name already exists
+            bool exists = false;
+            for (const auto & existingStr : currentKeys) {
+                try {
+                    PublicKey existingKey(existingStr);
+                    if (existingKey.name == newKey.name) {
+                        exists = true;
+                        debug("Trusted public key '%s' already exists, skipping", newKey.name);
+                        break;
+                    }
+                } catch (...) {
+                    // Ignore malformed existing keys
+                }
+            }
+
+            if (!exists) {
+                currentKeys.push_back(keyStr);
+                debug("Added trusted public key: %s", newKey.name);
+            }
+        } catch (Error & e) {
+            warn("Invalid public key format: %s", keyStr);
+        }
+    }
+
+    // Override the global setting with the updated list
+    settings.trustedPublicKeys.override(currentKeys);
+}
+
+void Store::removeTrustedPublicKeys(const Strings & keys)
+{
+    if (keys.empty()) return;
+
+    auto currentKeys = settings.trustedPublicKeys.get();
+
+    // Build set of key names to remove
+    std::set<std::string> namesToRemove;
+    for (const auto & keyStr : keys) {
+        try {
+            PublicKey key(keyStr);
+            namesToRemove.insert(key.name);
+        } catch (Error & e) {
+            warn("Invalid public key format: %s", keyStr);
+        }
+    }
+
+    // Filter out keys that match the names to remove
+    Strings newKeys;
+    for (const auto & existingStr : currentKeys) {
+        try {
+            PublicKey existingKey(existingStr);
+            if (namesToRemove.find(existingKey.name) == namesToRemove.end()) {
+                newKeys.push_back(existingStr);
+            } else {
+                debug("Removed trusted public key: %s", existingKey.name);
+            }
+        } catch (...) {
+            // Keep malformed keys as-is
+            newKeys.push_back(existingStr);
+        }
+    }
+
+    // Override the global setting with the filtered list
+    settings.trustedPublicKeys.override(newKeys);
+}
+
 bool Store::removeSubstituter(const std::string & uri)
 {
     auto lock = std::lock_guard(substituters_mutex);

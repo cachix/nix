@@ -235,6 +235,9 @@ public:
     bool pathInfoIsUntrusted(const ValidPathInfo &) override;
     bool realisationIsUntrusted(const Realisation &) override;
 
+    void addTrustedPublicKeys(const Strings & keys) override;
+    void removeTrustedPublicKeys(const Strings & keys) override;
+
     void addToStore(const ValidPathInfo & info, Source & source, RepairFlag repair, CheckSigsFlag checkSigs) override;
 
     StorePath addToStoreFromDump(
