@@ -1,5 +1,6 @@
-error: syntax error, unexpected end of file
-       at «stdin»:3:1:
+at «stdin»:3:1:
             2| # no content
             3|
              | ^
+
+       error: syntax error, unexpected end of file

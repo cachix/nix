@@ -1,4 +1,5 @@
-error: duplicate formal function argument 'x'
-       at «stdin»:1:8:
+at «stdin»:1:8:
             1| {x, y, x}: x
              |        ^
+
+       error: duplicate formal function argument 'x'
