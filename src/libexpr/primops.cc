@@ -1120,6 +1120,7 @@ static void prim_getEnv(EvalState & state, const PosIdx pos, Value ** args, Valu
 {
     std::string name(
         state.forceStringNoCtx(*args[0], pos, "while evaluating the first argument passed to builtins.getEnv"));
+    printTalkative("devenv getEnv: '%1%'", name);
     v.mkString(state.settings.restrictEval || state.settings.pureEval ? "" : getEnv(name).value_or(""));
 }
 
@@ -1893,6 +1894,8 @@ static void prim_pathExists(EvalState & state, const PosIdx pos, Value ** args, 
         auto symlinkResolution = mustBeDir ? SymlinkResolution::Full : SymlinkResolution::Ancestors;
         auto path = realisePath(state, pos, arg, symlinkResolution);
 
+        printTalkative("devenv pathExists: '%1%'", path);
+
         auto st = path.maybeLstat();
         auto exists = st && (!mustBeDir || st->type == SourceAccessor::tDirectory);
         v.mkBool(exists);
@@ -1993,6 +1996,7 @@ static RegisterPrimOp primop_dirOf({
 static void prim_readFile(EvalState & state, const PosIdx pos, Value ** args, Value & v)
 {
     auto path = realisePath(state, pos, *args[0]);
+    printTalkative("devenv readFile: '%1%'", path);
     auto s = path.readFile();
     if (s.find((char) 0) != std::string::npos)
         state.error<EvalError>("the contents of the file '%1%' cannot be represented as a Nix string", path)
@@ -2298,6 +2302,7 @@ static RegisterPrimOp primop_readFileType({
 static void prim_readDir(EvalState & state, const PosIdx pos, Value ** args, Value & v)
 {
     auto path = realisePath(state, pos, *args[0]);
+    printTalkative("devenv readDir: '%1%'", path);
 
     // Retrieve directory entries for all nodes in a directory.
     // This is similar to `getFileType` but is optimized to reduce system calls
