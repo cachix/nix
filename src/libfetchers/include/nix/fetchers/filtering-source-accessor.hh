@@ -75,7 +75,9 @@ struct AllowListSourceAccessor : public FilteringSourceAccessor
         ref<SourceAccessor> next,
         std::set<CanonPath> && allowedPrefixes,
         std::unordered_set<CanonPath> && allowedPaths,
-        MakeNotAllowedError && makeNotAllowedError);
+        MakeNotAllowedError && makeNotAllowedError,
+        std::unordered_set<std::string> && allowedFilenames = {},
+        std::unordered_set<std::string> && allowedFilenamePrefixes = {});
 
     using FilteringSourceAccessor::FilteringSourceAccessor;
 };

@@ -64,22 +64,38 @@ struct AllowListSourceAccessorImpl : AllowListSourceAccessor
 {
     std::set<CanonPath> allowedPrefixes;
     std::unordered_set<CanonPath> allowedPaths;
+    std::unordered_set<std::string> allowedFilenames;
+    std::unordered_set<std::string> allowedFilenamePrefixes;
 
     AllowListSourceAccessorImpl(
         ref<SourceAccessor> next,
         std::set<CanonPath> && allowedPrefixes,
         std::unordered_set<CanonPath> && allowedPaths,
-        MakeNotAllowedError && makeNotAllowedError)
+        MakeNotAllowedError && makeNotAllowedError,
+        std::unordered_set<std::string> && allowedFilenames,
+        std::unordered_set<std::string> && allowedFilenamePrefixes)
         : AllowListSourceAccessor(SourcePath(next), std::move(makeNotAllowedError))
         , allowedPrefixes(std::move(allowedPrefixes))
         , allowedPaths(std::move(allowedPaths))
+        , allowedFilenames(std::move(allowedFilenames))
+        , allowedFilenamePrefixes(std::move(allowedFilenamePrefixes))
     { }
 
     bool isAllowed(const CanonPath & path) override
     {
-        return
-            allowedPaths.contains(path)
-            || path.isAllowed(allowedPrefixes);
+        if (allowedPaths.contains(path) || path.isAllowed(allowedPrefixes))
+            return true;
+
+        auto basename = path.baseName().value_or("");
+        if (allowedFilenames.contains(std::string(basename)))
+            return true;
+
+        for (const auto & prefix : allowedFilenamePrefixes) {
+            if (basename.find(prefix) == 0)
+                return true;
+        }
+
+        return false;
     }
 
     void allowPrefix(CanonPath prefix) override
@@ -92,13 +108,17 @@ ref<AllowListSourceAccessor> AllowListSourceAccessor::create(
     ref<SourceAccessor> next,
     std::set<CanonPath> && allowedPrefixes,
     std::unordered_set<CanonPath> && allowedPaths,
-    MakeNotAllowedError && makeNotAllowedError)
+    MakeNotAllowedError && makeNotAllowedError,
+    std::unordered_set<std::string> && allowedFilenames,
+    std::unordered_set<std::string> && allowedFilenamePrefixes)
 {
     return make_ref<AllowListSourceAccessorImpl>(
         next,
         std::move(allowedPrefixes),
         std::move(allowedPaths),
-        std::move(makeNotAllowedError));
+        std::move(makeNotAllowedError),
+        std::move(allowedFilenames),
+        std::move(allowedFilenamePrefixes));
 }
 
 bool CachingFilteringSourceAccessor::isAllowed(const CanonPath & path)

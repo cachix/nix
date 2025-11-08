@@ -440,37 +440,6 @@ struct GitRepoImpl : GitRepo, std::enable_shared_from_this<GitRepoImpl>
         if (pathExists(modulesFile.string()))
             info.submodules = parseSubmodules(modulesFile);
 
-        fs::path cwd = fs::current_path();
-
-        // Usually ignored, so add it manually
-        if (pathExists(cwd / ".devenv.flake.nix")) {
-            info.files.insert(CanonPath((cwd / ".devenv/cli-options.nix").string()).removePrefix(CanonPath(path.string())).rel());
-            info.files.insert(CanonPath((cwd / ".devenv.flake.nix").string()).removePrefix(CanonPath(path.string())).rel());
-            info.files.insert(CanonPath((cwd / ".devenv/flake.json").string()).removePrefix(CanonPath(path.string())).rel());
-	    info.files.insert(CanonPath((cwd / ".devenv/devenv.json").string()).removePrefix(CanonPath(path.string())).rel());
-            // support devenv test
-            for (const auto & entry : fs::directory_iterator(cwd)) {
-                if (entry.path().filename().string().find(".devenv.") == 0 && fs::is_directory(entry.path())) {
-                    // add flake.json, devenv.json and cli-options.nix
-                    info.files.insert(CanonPath((cwd / entry.path() / "cli-options.nix").string()).removePrefix(CanonPath(path.string())).rel());
-                    info.files.insert(CanonPath((cwd / entry.path() / "flake.json").string()).removePrefix(CanonPath(path.string())).rel());
-                    info.files.insert(CanonPath((cwd / entry.path() / "devenv.json").string()).removePrefix(CanonPath(path.string())).rel());
-                }
-            }
-        }
-        if (pathExists(cwd / "devenv.local.nix")) {
-            info.files.insert(CanonPath((cwd / "devenv.local.nix").string()).removePrefix(CanonPath(path.string())).rel());
-        }
-        if (pathExists(cwd / "devenv.nix")) {
-            info.files.insert(CanonPath((cwd / "devenv.nix").string()).removePrefix(CanonPath(path.string())).rel());
-        }
-        // find all files that begin with .env
-        for (const auto & entry : fs::directory_iterator(cwd)) {
-            if (entry.path().filename().string().find(".env") == 0) {
-                info.files.insert(CanonPath((cwd / entry.path()).string()).removePrefix(CanonPath(path.string())).rel());
-            }
-        }
-
         return info;
     }
 
@@ -1246,13 +1215,26 @@ ref<SourceAccessor> GitRepoImpl::getAccessor(
 ref<SourceAccessor> GitRepoImpl::getAccessor(const WorkdirInfo & wd, bool exportIgnore, MakeNotAllowedError makeNotAllowedError)
 {
     auto self = ref<GitRepoImpl>(shared_from_this());
+    std::unordered_set<std::string> allowedFilenames{
+        "devenv.nix",
+        "devenv.local.nix",
+        ".devenv.flake.nix",
+        "cli-options.nix",
+        "flake.json",
+        "devenv.json",
+    };
+    std::unordered_set<std::string> allowedFilenamePrefixes{
+        ".env",
+    };
     ref<SourceAccessor> fileAccessor =
         AllowListSourceAccessor::create(
             makeFSSourceAccessor(path),
             std::set<CanonPath>{ wd.files },
             // Always allow access to the root, but not its children.
             std::unordered_set<CanonPath>{CanonPath::root},
-            std::move(makeNotAllowedError)).cast<SourceAccessor>();
+            std::move(makeNotAllowedError),
+            std::move(allowedFilenames),
+            std::move(allowedFilenamePrefixes)).cast<SourceAccessor>();
     if (exportIgnore)
         return make_ref<GitExportIgnoreSourceAccessor>(self, fileAccessor, std::nullopt);
     else
