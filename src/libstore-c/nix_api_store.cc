@@ -11,6 +11,7 @@
 #include "nix/store/indirect-root-store.hh"
 #include "nix/store/local-store.hh"
 #include "nix/store/gc-store.hh"
+#include "nix/store/profiles.hh"
 
 #include "nix/store/globals.hh"
 
@@ -575,6 +576,48 @@ nix_trusted_flag nix_store_is_trusted_client(nix_c_context * context, Store * st
         return result.value() ? NIX_TRUSTED_FLAG_TRUSTED : NIX_TRUSTED_FLAG_NOT_TRUSTED;
     }
     NIXC_CATCH_ERRS_RES(NIX_TRUSTED_FLAG_UNKNOWN)
+}
+
+nix_err nix_store_create_generation(
+    nix_c_context * context, Store * store, const char * profile, StorePath * out_path)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!store)
+            throw std::invalid_argument("store must not be null");
+        if (!profile)
+            throw std::invalid_argument("profile must not be null");
+        if (!out_path)
+            throw std::invalid_argument("out_path must not be null");
+
+        // Cast to LocalFSStore
+        auto * localStore = dynamic_cast<nix::LocalFSStore *>(&*store->ptr);
+        if (!localStore)
+            throw std::invalid_argument("store must be a LocalFSStore");
+
+        // Call C++ createGeneration function
+        nix::createGeneration(*localStore, profile, out_path->path);
+
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_store_delete_old_generations(nix_c_context * context, const char * profile, bool dry_run)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (!profile)
+            throw std::invalid_argument("profile must not be null");
+
+        // Call C++ deleteOldGenerations function
+        nix::deleteOldGenerations(profile, dry_run);
+
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
 }
 
 } // extern "C"
