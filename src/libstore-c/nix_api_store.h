@@ -544,6 +544,38 @@ typedef enum {
  */
 nix_trusted_flag nix_store_is_trusted_client(nix_c_context * context, Store * store);
 
+/**
+ * @brief Create a new generation of a profile
+ *
+ * Creates a new generation number for the profile and creates a symlink
+ * profile-N-link pointing to the output path. Updates the main profile
+ * symlink to point to the new generation.
+ *
+ * If the previous generation already points to the same output path, no
+ * new generation is created (idempotent behavior).
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference (must be a LocalFSStore)
+ * @param[in] profile The profile path (e.g., "/home/user/.devenv/gc/shell")
+ * @param[in] out_path The store path to set as this generation's content
+ * @return NIX_OK on success, or an error code on failure
+ */
+nix_err nix_store_create_generation(
+    nix_c_context * context, Store * store, const char * profile, StorePath * out_path);
+
+/**
+ * @brief Delete old generations of a profile
+ *
+ * Deletes all generations except the currently active one. This is
+ * equivalent to `nix-env --delete-generations old`.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] profile The profile path (e.g., "/home/user/.devenv/gc/shell")
+ * @param[in] dry_run If true, only log what would be deleted without actually deleting
+ * @return NIX_OK on success, or an error code on failure
+ */
+nix_err nix_store_delete_old_generations(nix_c_context * context, const char * profile, bool dry_run);
+
 // cffi end
 #ifdef __cplusplus
 }
