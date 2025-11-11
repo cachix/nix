@@ -273,6 +273,195 @@ nix_err nix_store_get_fs_closure(
     void * userdata,
     void (*callback)(nix_c_context * context, void * userdata, const StorePath * store_path));
 
+/**
+ * @brief Add a substituter to a store at runtime.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @param[in] uri The substituter URI (e.g., "https://cache.nixos.org")
+ * @return NIX_OK on success, or an error code on failure
+ */
+nix_err nix_store_add_substituter(nix_c_context * context, Store * store, const char * uri);
+
+/**
+ * @brief Callback type for listing substituters
+ *
+ * @param[in] uri The substituter URI
+ * @param[in] priority The priority value of this substituter
+ * @param[in] user_data User-provided data passed to nix_store_list_substituters
+ */
+typedef void (*nix_substituter_callback)(const char * uri, int priority, void * user_data);
+
+/**
+ * @brief Get all substituters for a store.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @param[in] callback Function called for each substituter
+ * @param[in] user_data Data passed to callback
+ * @return NIX_OK on success, or an error code
+ */
+nix_err nix_store_list_substituters(
+    nix_c_context * context, Store * store, nix_substituter_callback callback, void * user_data);
+
+/**
+ * @brief Remove a substituter from a store.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @param[in] uri The substituter URI to remove
+ * @return NIX_OK on success, or NIX_ERR_KEY if not found
+ */
+nix_err nix_store_remove_substituter(nix_c_context * context, Store * store, const char * uri);
+
+/**
+ * @brief Clear all substituters from a store.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @return NIX_OK on success
+ */
+nix_err nix_store_clear_substituters(nix_c_context * context, Store * store);
+
+/**
+ * @brief Add trusted public keys to the store's trusted keys set.
+ *
+ * These keys will be used globally to verify signatures on store paths.
+ * Keys are added to the existing set (append-only, no duplicates).
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @param[in] keys Array of public key strings in the format "name:base64-key"
+ * @param[in] n_keys Number of keys in the array
+ * @return NIX_OK on success, or an error code on failure
+ *
+ * @note For RemoteStore (daemon), this requires the client to be a trusted user.
+ * @note Keys are matched by name; adding a key with an existing name is a no-op.
+ */
+nix_err nix_store_add_trusted_public_keys(
+    nix_c_context * context,
+    Store * store,
+    const char ** keys,
+    size_t n_keys);
+
+/**
+ * @brief Remove trusted public keys from the store's trusted keys set.
+ *
+ * Keys are matched by name (the part before the colon).
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @param[in] keys Array of public key strings (only the name is used for matching)
+ * @param[in] n_keys Number of keys in the array
+ * @return NIX_OK on success, or an error code on failure
+ */
+nix_err nix_store_remove_trusted_public_keys(
+    nix_c_context * context,
+    Store * store,
+    const char ** keys,
+    size_t n_keys);
+
+/**
+ * @brief Garbage collection action types
+ *
+ * Specifies what the garbage collection operation should do.
+ */
+typedef enum {
+    /** Return the set of live paths (reachable from roots) */
+    NIX_GC_RETURN_LIVE = 0,
+    /** Return the set of dead paths (not reachable from roots) */
+    NIX_GC_RETURN_DEAD = 1,
+    /** Delete all dead paths */
+    NIX_GC_DELETE_DEAD = 2,
+    /** Delete only the specific paths provided (if they are dead) */
+    NIX_GC_DELETE_SPECIFIC = 3,
+} nix_gc_action;
+
+/**
+ * @brief Callback for iterating over store paths
+ *
+ * Called once for each store path in a result set.
+ *
+ * @param[in] path The store path
+ * @param[in] user_data User-provided data passed to the function
+ */
+typedef void (*nix_store_path_callback)(const StorePath * path, void * user_data);
+
+/**
+ * @brief Perform garbage collection on the store.
+ *
+ * This function provides flexible garbage collection with different modes:
+ * - NIX_GC_RETURN_LIVE: Returns paths reachable from GC roots (live paths)
+ * - NIX_GC_RETURN_DEAD: Returns paths not reachable from GC roots (dead paths)
+ * - NIX_GC_DELETE_DEAD: Deletes all dead paths
+ * - NIX_GC_DELETE_SPECIFIC: Deletes specific paths from the `paths_to_delete` array,
+ *   but only if they are not reachable from GC roots (respects liveness)
+ *
+ * When `ignore_liveness` is true, safety checks are bypassed (dangerous!).
+ *
+ * This only works with GcStore implementations (e.g., LocalStore).
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference (must support GC)
+ * @param[in] action The garbage collection action to perform
+ * @param[in] paths_to_delete For NIX_GC_DELETE_SPECIFIC: paths to consider for deletion.
+ *                             Can be NULL for other actions. Array is not modified.
+ * @param[in] num_paths Number of paths in paths_to_delete (0 if paths_to_delete is NULL)
+ * @param[in] ignore_liveness If true, ignore reachability from roots and delete even live paths.
+ *                            Only has effect with NIX_GC_DELETE_SPECIFIC. Dangerous!
+ * @param[in] max_freed Stop after freeing this many bytes. 0 means no limit.
+ * @param[in] callback Optional callback function called for each path in the result set
+ *                     (paths returned, deleted, or considered). Can be NULL.
+ * @param[in] user_data Arbitrary data passed to the callback
+ * @param[out] bytes_freed Optional pointer to uint64_t that will be set to the number of
+ *                         bytes freed (for delete operations) or would be freed (for return operations).
+ *                         Can be NULL if not needed.
+ * @return NIX_OK on success, error code on failure
+ */
+nix_err nix_store_collect_garbage(
+    nix_c_context * context,
+    Store * store,
+    nix_gc_action action,
+    StorePath ** paths_to_delete,
+    size_t num_paths,
+    bool ignore_liveness,
+    uint64_t max_freed,
+    nix_store_path_callback callback,
+    void * user_data,
+    uint64_t * bytes_freed);
+
+/**
+ * @brief Trust status of a client connection
+ *
+ * Indicates whether a client is trusted by the store.
+ */
+typedef enum {
+    /** Client is not trusted */
+    NIX_TRUSTED_FLAG_NOT_TRUSTED = 0,
+    /** Client is trusted */
+    NIX_TRUSTED_FLAG_TRUSTED = 1,
+    /** Trust status is not applicable or unknown */
+    NIX_TRUSTED_FLAG_UNKNOWN = 2
+} nix_trusted_flag;
+
+/**
+ * @brief Check if the client connection is trusted
+ *
+ * This is the opposite of the StoreConfig::isTrusted setting.
+ * That setting is about whether we trust the store. This method
+ * is about whether the store trusts us (the client).
+ *
+ * For LocalStore, this indicates whether the current user has elevated privileges.
+ * For RemoteStore, this reflects the daemon's trust decision based on the
+ * `trusted-users` configuration.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @return NIX_TRUSTED_FLAG_TRUSTED if trusted, NIX_TRUSTED_FLAG_NOT_TRUSTED if not,
+ *         or NIX_TRUSTED_FLAG_UNKNOWN if not applicable
+ */
+nix_trusted_flag nix_store_is_trusted_client(nix_c_context * context, Store * store);
+
 // cffi end
 #ifdef __cplusplus
 }
