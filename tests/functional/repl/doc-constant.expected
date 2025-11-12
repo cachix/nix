@@ -24,7 +24,7 @@ Attribute `empty`
 Unchangeably constant.
 
 nix-repl> :doc lib.attr.undocument
-error:
+
        … while evaluating the attribute 'attr.undocument'
          at /path/to/tests/functional/repl/doc-comments.nix:52:3:
            51|   */
@@ -32,10 +32,14 @@ error:
              |   ^
            53|
 
-       error: attribute 'undocument' missing
+
+
        at «string»:1:1:
             1| lib.attr.undocument
              | ^
+
+       error: attribute 'undocument' missing
+
        Did you mean undocumented?
 
 nix-repl> :doc (import ./doc-comments.nix).constant
@@ -70,37 +74,42 @@ Attribute `undocumented`
 No documentation found.
 
 nix-repl> :doc missing
-error: undefined variable 'missing'
-       at «string»:1:1:
+at «string»:1:1:
             1| missing
              | ^
 
+       error: undefined variable 'missing'
+
 nix-repl> :doc constanz
-error: undefined variable 'constanz'
-       at «string»:1:1:
+at «string»:1:1:
             1| constanz
              | ^
 
+       error: undefined variable 'constanz'
+
 nix-repl> :doc missing.attr
-error: undefined variable 'missing'
-       at «string»:1:1:
+at «string»:1:1:
             1| missing.attr
              | ^
 
+       error: undefined variable 'missing'
+
 nix-repl> :doc lib.missing
-error: attribute 'missing' missing
-       at «string»:1:1:
+at «string»:1:1:
             1| lib.missing
              | ^
 
+       error: attribute 'missing' missing
+
 nix-repl> :doc lib.missing.attr
-error: attribute 'missing' missing
-       at «string»:1:1:
+at «string»:1:1:
             1| lib.missing.attr
              | ^
 
+       error: attribute 'missing' missing
+
 nix-repl> :doc lib.attr.undocumental
-error:
+
        … while evaluating the attribute 'attr.undocumental'
          at /path/to/tests/functional/repl/doc-comments.nix:52:3:
            51|   */
@@ -108,8 +117,12 @@ error:
              |   ^
            53|
 
-       error: attribute 'undocumental' missing
+
+
        at «string»:1:1:
             1| lib.attr.undocumental
              | ^
+
+       error: attribute 'undocumental' missing
+
        Did you mean undocumented?

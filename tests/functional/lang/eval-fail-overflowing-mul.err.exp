@@ -1,4 +1,4 @@
-error:
+
        … while calling the 'mul' builtin
          at /pwd/lang/eval-fail-overflowing-mul.nix:4:7:
             3| in
@@ -6,11 +6,14 @@ error:
              |       ^
             5|
 
+
        … while calling the 'mul' builtin
          at /pwd/lang/eval-fail-overflowing-mul.nix:4:3:
             3| in
             4| a * a * a
              |   ^
             5|
+
+
 
        error: integer overflow in multiplying 4294967297 * 4294967297

@@ -26,7 +26,7 @@ Function `__functor`\
 This looks bad, but the docs are ok because of the eta expansion.
 
 nix-repl> :doc recursive2
-error:
+
        … while partially calling '__functor' to retrieve documentation
 
        … while calling '__functor'
@@ -36,6 +36,7 @@ error:
              |                 ^
            91|   };
 
+
        … from call site
          at /path/to/tests/functional/repl/doc-functor.nix:90:23:
            89|     */
@@ -43,17 +44,20 @@ error:
              |                       ^
            91|   };
 
+
        (19999 duplicate frames omitted)
 
-       error: stack overflow; max-call-depth exceeded
+
        at /path/to/tests/functional/repl/doc-functor.nix:90:23:
            89|     */
            90|     __functor = self: self.__functor self;
              |                       ^
            91|   };
 
+       error: stack overflow; max-call-depth exceeded
+
 nix-repl> :doc diverging
-error:
+
        … while partially calling '__functor' to retrieve documentation
 
        (10000 duplicate frames omitted)
@@ -65,12 +69,15 @@ error:
              |                     ^
           104|       };
 
-       error: stack overflow; max-call-depth exceeded
+
+
        at /path/to/tests/functional/repl/doc-functor.nix:103:28:
           102|       f = x: {
           103|         __functor = self: (f (x + 1));
              |                            ^
           104|       };
+
+       error: stack overflow; max-call-depth exceeded
 
 nix-repl> :doc helper
 Function `square`\
