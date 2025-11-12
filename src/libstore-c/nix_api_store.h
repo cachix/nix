@@ -462,6 +462,35 @@ typedef enum {
  */
 nix_trusted_flag nix_store_is_trusted_client(nix_c_context * context, Store * store);
 
+/**
+ * @brief Add a permanent GC root for a store path.
+ *
+ * Creates a symlink at `gc_root` that points to the store path, and registers it as
+ * a GC root so the path will not be garbage collected.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference (must support GC roots, typically LocalStore)
+ * @param[in] path The store path to root
+ * @param[in] gc_root The filesystem path where the GC root symlink will be created
+ * @return NIX_OK on success, or an error code on failure
+ *
+ * @note Only works with LocalFSStore implementations
+ */
+nix_err nix_store_add_perm_root(nix_c_context * context, Store * store, StorePath * path, const char * gc_root);
+
+/**
+ * @brief Add an indirect GC root for a store path.
+ *
+ * Adds an indirect (weak) reference GC root that points to `symlink_path`.
+ * This is used internally by add_perm_root on stores that support it.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix Store reference
+ * @param[in] symlink_path The filesystem path to the symlink created by add_perm_root
+ * @return NIX_OK on success, or an error code on failure
+ */
+nix_err nix_store_add_indirect_root(nix_c_context * context, Store * store, const char * symlink_path);
+
 // cffi end
 #ifdef __cplusplus
 }
