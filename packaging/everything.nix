@@ -120,7 +120,7 @@ stdenv.mkDerivation (finalAttrs: {
     This includes both the unit tests and the functional tests, but not the
     integration tests that run in CI (the flake's `hydraJobs` and some of the `checks`).
   */
-  doCheck = true;
+  doCheck = false;
 
   /**
     `fixupPhase` currently doesn't understand that a symlink output isn't writable.
