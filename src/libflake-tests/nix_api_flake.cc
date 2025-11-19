@@ -443,4 +443,5 @@ TEST_F(nix_api_store_test, nix_api_flake_lock_flags_add_input_override_empty_pat
     nix_flake_settings_free(settings);
 }
 
+++++++ wkymszxs 797860ed "nix_flake_input_set_follows and overrides" (rebased revision)
 } // namespace nixC
