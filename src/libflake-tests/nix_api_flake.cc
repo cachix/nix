@@ -380,4 +380,119 @@ TEST_F(nix_api_store_test, nix_api_load_flake_with_flags)
     nix_flake_settings_free(settings);
 }
 
+TEST_F(nix_api_store_test, nix_flake_input_set_follows)
+{
+    nix_libstore_init(ctx);
+    assert_ctx_ok();
+    nix_libexpr_init(ctx);
+    assert_ctx_ok();
+
+    auto fetchSettings = nix_fetchers_settings_new(ctx);
+    assert_ctx_ok();
+    ASSERT_NE(nullptr, fetchSettings);
+
+    auto settings = nix_flake_settings_new(ctx);
+    assert_ctx_ok();
+    ASSERT_NE(nullptr, settings);
+
+    auto parseFlags = nix_flake_reference_parse_flags_new(ctx);
+    assert_ctx_ok();
+    ASSERT_NE(nullptr, parseFlags);
+
+    nix_flake_reference * flakeRef = nullptr;
+    std::string fragment;
+    nix_flake_reference_and_fragment_from_string(
+        ctx, fetchSettings, settings, parseFlags, "nixpkgs", 7, &flakeRef, OBSERVE_STRING(fragment));
+    assert_ctx_ok();
+    ASSERT_NE(nullptr, flakeRef);
+
+    auto input = nix_flake_input_new(ctx, flakeRef, true);
+    assert_ctx_ok();
+    ASSERT_NE(nullptr, input);
+
+    const char * followsPath = "dwarffs/nixpkgs";
+    nix_err err = nix_flake_input_set_follows(ctx, input, followsPath, strlen(followsPath));
+    assert_ctx_ok();
+    ASSERT_EQ(NIX_OK, err);
+
+    nix_flake_input_free(input);
+    nix_flake_reference_free(flakeRef);
+    nix_flake_reference_parse_flags_free(parseFlags);
+    nix_flake_settings_free(settings);
+    nix_fetchers_settings_free(fetchSettings);
+}
+
+TEST_F(nix_api_store_test, nix_flake_input_set_overrides)
+{
+    nix_libstore_init(ctx);
+    assert_ctx_ok();
+    nix_libexpr_init(ctx);
+    assert_ctx_ok();
+
+    auto fetchSettings = nix_fetchers_settings_new(ctx);
+    assert_ctx_ok();
+    ASSERT_NE(nullptr, fetchSettings);
+
+    auto settings = nix_flake_settings_new(ctx);
+    assert_ctx_ok();
+    ASSERT_NE(nullptr, settings);
+
+    auto parseFlags = nix_flake_reference_parse_flags_new(ctx);
+    assert_ctx_ok();
+    ASSERT_NE(nullptr, parseFlags);
+
+    // Create the main input (e.g., "foo" flake)
+    nix_flake_reference * fooRef = nullptr;
+    std::string fragment1;
+    nix_flake_reference_and_fragment_from_string(
+        ctx, fetchSettings, settings, parseFlags, "github:owner/foo", 18, &fooRef, OBSERVE_STRING(fragment1));
+    assert_ctx_ok();
+    ASSERT_NE(nullptr, fooRef);
+
+    auto fooInput = nix_flake_input_new(ctx, fooRef, true);
+    assert_ctx_ok();
+    ASSERT_NE(nullptr, fooInput);
+
+    // Create nested override: make foo's nixpkgs input follow our top-level nixpkgs
+    auto overrides = nix_flake_inputs_new(ctx);
+    assert_ctx_ok();
+    ASSERT_NE(nullptr, overrides);
+
+    nix_flake_reference * nixpkgsRef = nullptr;
+    std::string fragment2;
+    nix_flake_reference_and_fragment_from_string(
+        ctx, fetchSettings, settings, parseFlags, "nixpkgs", 7, &nixpkgsRef, OBSERVE_STRING(fragment2));
+    assert_ctx_ok();
+    ASSERT_NE(nullptr, nixpkgsRef);
+
+    auto nixpkgsOverride = nix_flake_input_new(ctx, nixpkgsRef, true);
+    assert_ctx_ok();
+    ASSERT_NE(nullptr, nixpkgsOverride);
+
+    const char * followsPath = "nixpkgs";
+    nix_err err = nix_flake_input_set_follows(ctx, nixpkgsOverride, followsPath, strlen(followsPath));
+    assert_ctx_ok();
+    ASSERT_EQ(NIX_OK, err);
+
+    err = nix_flake_inputs_add(ctx, overrides, "nixpkgs", 7, nixpkgsOverride);
+    assert_ctx_ok();
+    ASSERT_EQ(NIX_OK, err);
+
+    // Set the overrides on the foo input
+    err = nix_flake_input_set_overrides(ctx, fooInput, overrides);
+    assert_ctx_ok();
+    ASSERT_EQ(NIX_OK, err);
+
+    // Verify the overrides were set (they're now part of fooInput->input.overrides)
+    ASSERT_EQ(1, fooInput->input.overrides.size());
+    ASSERT_TRUE(fooInput->input.overrides.contains("nixpkgs"));
+
+    nix_flake_input_free(fooInput);
+    nix_flake_reference_free(fooRef);
+    nix_flake_reference_free(nixpkgsRef);
+    nix_flake_reference_parse_flags_free(parseFlags);
+    nix_flake_settings_free(settings);
+    nix_fetchers_settings_free(fetchSettings);
+}
+
 } // namespace nixC

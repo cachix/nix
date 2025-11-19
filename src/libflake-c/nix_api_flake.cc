@@ -231,6 +231,32 @@ nix_flake_input * nix_flake_input_new(nix_c_context * context, nix_flake_referen
     NIXC_CATCH_ERRS_NULL
 }
 
+nix_err nix_flake_input_set_follows(
+    nix_c_context * context, nix_flake_input * input, const char * followsPath, size_t followsPathLen)
+{
+    nix_clear_err(context);
+    try {
+        std::string pathStr(followsPath, followsPathLen);
+        auto follows = nix::flake::parseInputAttrPath(pathStr);
+        input->input.follows = follows;
+        input->input.ref = std::nullopt;
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_flake_input_set_overrides(
+    nix_c_context * context, nix_flake_input * input, nix_flake_inputs * overrides)
+{
+    nix_clear_err(context);
+    try {
+        input->input.overrides = std::move(overrides->inputs);
+        delete overrides; // Transfer ownership
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
 void nix_flake_input_free(nix_flake_input * input)
 {
     delete input;

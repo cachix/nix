@@ -297,6 +297,40 @@ nix_flake_input *
 nix_flake_input_new(nix_c_context * context, nix_flake_reference * flakeRef, bool isFlake);
 
 /**
+ * @brief Set the follows attribute for a flake input
+ * @param[out] context Optional, stores error information
+ * @param[in] input The input to modify
+ * @param[in] followsPath The input path to follow (e.g., "dwarffs/nixpkgs")
+ * @param[in] followsPathLen The length of the followsPath string
+ * @return NIX_OK on success, NIX_ERR on failure
+ *
+ * The follows attribute allows an input to reference another input's locked version
+ * instead of having its own independent version. This is useful for deduplication.
+ * After setting follows, the input should not have a ref set.
+ */
+nix_err nix_flake_input_set_follows(
+    nix_c_context * context, nix_flake_input * input, const char * followsPath, size_t followsPathLen);
+
+/**
+ * @brief Set nested input overrides for a flake input
+ * @param[out] context Optional, stores error information
+ * @param[in] input The input to modify
+ * @param[in] overrides The nested input overrides to apply (ownership is transferred)
+ * @return NIX_OK on success, NIX_ERR on failure
+ *
+ * This allows you to override the inputs of a flake input. For example, if you have
+ * a flake input "foo" and you want to override its "nixpkgs" input to follow your
+ * top-level nixpkgs, you would:
+ * 1. Create a nix_flake_inputs collection for the overrides
+ * 2. Add a "nixpkgs" input with a follows attribute to it
+ * 3. Call this function to set the overrides on the "foo" input
+ *
+ * After this call, the overrides collection is consumed and should not be freed or reused.
+ */
+nix_err nix_flake_input_set_overrides(
+    nix_c_context * context, nix_flake_input * input, nix_flake_inputs * overrides);
+
+/**
  * @brief Deallocate and release the resources associated with a nix_flake_input
  * Does not fail.
  * @param[in] input the nix_flake_input to free
