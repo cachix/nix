@@ -825,7 +825,7 @@ LockedFlake lockFlake(
 
         debug("new lock file: %s", newLockFile);
 
-        auto sourcePath = topRef.input.getSourcePath();
+        auto sourcePath = topRef.input.getSourcePath(state.fetchSettings);
 
         /* Check whether we need to / can write the new lock file. */
         if (newLockFile != oldLockFile || lockFlags.outputLockFilePath) {
@@ -890,6 +890,7 @@ LockedFlake lockFlake(
                             }
 
                             topRef.input.putFile(
+                                state.fetchSettings,
                                 CanonPath((topRef.subdir == "" ? "" : topRef.subdir + "/") + "flake.lock"),
                                 newLockFileS,
                                 commitMessage);
@@ -1083,7 +1084,7 @@ std::optional<Fingerprint> LockedFlake::getFingerprint(Store & store, const fetc
     if (lockFile.isUnlocked(fetchSettings))
         return std::nullopt;
 
-    auto fingerprint = flake.lockedRef.input.getFingerprint(store);
+    auto fingerprint = flake.lockedRef.input.getFingerprint(fetchSettings, store);
     if (!fingerprint)
         return std::nullopt;
 

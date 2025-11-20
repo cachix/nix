@@ -129,7 +129,7 @@ Input Input::fromAttrs(Attrs && attrs)
     return std::move(*res);
 }
 
-std::optional<std::string> Input::getFingerprint(Store & store) const
+std::optional<std::string> Input::getFingerprint(const Settings & settings, Store & store) const
 {
     if (!scheme)
         return std::nullopt;
@@ -137,7 +137,7 @@ std::optional<std::string> Input::getFingerprint(Store & store) const
     if (cachedFingerprint)
         return *cachedFingerprint;
 
-    auto fingerprint = scheme->getFingerprint(store, *this);
+    auto fingerprint = scheme->getFingerprint(settings, store, *this);
 
     if (fingerprint)
         fingerprint = std::string(scheme->schemeName()) + ":" + *fingerprint;
@@ -344,7 +344,7 @@ std::pair<ref<SourceAccessor>, Input> Input::getAccessorUnchecked(const Settings
 
             auto accessor = store.requireStoreObjectAccessor(storePath);
 
-            accessor->fingerprint = getFingerprint(store);
+            accessor->fingerprint = getFingerprint(settings, store);
 
             // Store a cache entry for the substituted tree so later fetches
             // can reuse the existing nar instead of copying the unpacked
@@ -382,7 +382,7 @@ std::pair<ref<SourceAccessor>, Input> Input::getAccessorUnchecked(const Settings
     auto [accessor, result] = scheme->getAccessor(settings, store, *this);
 
     if (!accessor->fingerprint)
-        accessor->fingerprint = result.getFingerprint(store);
+        accessor->fingerprint = result.getFingerprint(settings, store);
     else
         result.cachedFingerprint = accessor->fingerprint;
 
@@ -403,16 +403,16 @@ void Input::clone(const Settings & settings, Store & store, const std::filesyste
     scheme->clone(settings, store, *this, destDir);
 }
 
-std::optional<std::filesystem::path> Input::getSourcePath() const
+std::optional<std::filesystem::path> Input::getSourcePath(const Settings & settings) const
 {
-    return scheme ? scheme->getSourcePath(*this) : std::nullopt;
+    return scheme ? scheme->getSourcePath(settings, *this) : std::nullopt;
 }
 
-void Input::putFile(const CanonPath & path, std::string_view contents, std::optional<std::string> commitMsg) const
+void Input::putFile(const Settings & settings, const CanonPath & path, std::string_view contents, std::optional<std::string> commitMsg) const
 {
     if (!scheme)
         throw Error("unsupported input '%s' does not support modifying file '%s'", attrsToJSON(attrs), path);
-    return scheme->putFile(*this, path, contents, commitMsg);
+    return scheme->putFile(settings, *this, path, contents, commitMsg);
 }
 
 std::string Input::getName() const
@@ -502,13 +502,13 @@ Input InputScheme::applyOverrides(const Input & input, std::optional<std::string
     return input;
 }
 
-std::optional<std::filesystem::path> InputScheme::getSourcePath(const Input & input) const
+std::optional<std::filesystem::path> InputScheme::getSourcePath(const Settings & settings, const Input & input) const
 {
     return {};
 }
 
 void InputScheme::putFile(
-    const Input & input, const CanonPath & path, std::string_view contents, std::optional<std::string> commitMsg) const
+    const Settings & settings, const Input & input, const CanonPath & path, std::string_view contents, std::optional<std::string> commitMsg) const
 {
     throw Error("input '%s' does not support modifying file '%s'", input.to_string(), path);
 }
