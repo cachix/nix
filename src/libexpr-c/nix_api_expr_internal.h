@@ -7,6 +7,7 @@
 #include "nix/expr/attr-set.hh"
 #include "nix_api_value.h"
 #include "nix/expr/search-path.hh"
+#include "nix/util/source-path.hh"
 
 extern "C" {
 
@@ -25,6 +26,17 @@ struct EvalState
     nix::fetchers::Settings fetchSettings;
     nix::EvalSettings settings;
     nix::EvalState state;
+
+    EvalState(
+        nix::fetchers::Settings && fs,
+        nix::EvalSettings && s,
+        const nix::LookupPath & lp,
+        nix::ref<nix::Store> st)
+      : fetchSettings(std::move(fs)),
+        settings(std::move(s)),
+        state(lp, st, fetchSettings, settings)
+    {
+    }
 };
 
 struct BindingsBuilder

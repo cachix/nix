@@ -123,6 +123,17 @@ struct Settings : public Config
         true,
         Xp::Flakes};
 
+    Setting<std::string> baseDirectory{
+        this,
+        "",
+        "base-directory",
+        R"(
+          Base directory for resolving relative paths in fetchTree and
+          related functions. When set, relative paths like `./foo` will
+          be resolved against this directory instead of the current
+          working directory.
+        )"};
+
     ref<Cache> getCache() const;
 
 private:
