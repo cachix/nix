@@ -100,18 +100,19 @@ struct PathInputScheme : InputScheme
         };
     }
 
-    std::optional<std::filesystem::path> getSourcePath(const Input & input) const override
+    std::optional<std::filesystem::path> getSourcePath(const Settings & settings, const Input & input) const override
     {
-        return getAbsPath(input);
+        return getAbsPath(settings, input);
     }
 
     void putFile(
+        const Settings & settings,
         const Input & input,
         const CanonPath & path,
         std::string_view contents,
         std::optional<std::string> commitMsg) const override
     {
-        writeFile(getAbsPath(input) / path.rel(), contents);
+        writeFile(getAbsPath(settings, input) / path.rel(), contents);
     }
 
     std::optional<std::filesystem::path> isRelative(const Input & input) const override
@@ -128,12 +129,29 @@ struct PathInputScheme : InputScheme
         return (bool) input.getNarHash();
     }
 
-    std::filesystem::path getAbsPath(const Input & input) const
+    bool isLocal(const Input & input) const override
+    {
+        return true;
+    }
+
+    std::optional<std::string> getFingerprint(const Settings & settings, Store & store, const Input & input) const override
+    {
+        if (auto narHash = input.getNarHash())
+            return "path:" + narHash->to_string(HashFormat::SRI, true);
+        return std::nullopt;
+    }
+
+    std::filesystem::path getAbsPath(const Settings & settings, const Input & input) const
     {
         std::filesystem::path path = getStrAttr(input.attrs, "path");
 
         if (path.is_absolute())
             return canonPath(path);
+
+        // Try to resolve relative path using base directory if available
+        if (!settings.baseDirectory.get().empty()) {
+            return canonPath(std::filesystem::path(settings.baseDirectory.get()) / path, true);
+        }
 
         throw Error("cannot fetch input '%s' because it uses a relative path", input.to_string());
     }
@@ -144,7 +162,7 @@ struct PathInputScheme : InputScheme
         Input input(_input);
         auto path = getStrAttr(input.attrs, "path");
 
-        auto absPath = getAbsPath(input);
+        auto absPath = getAbsPath(settings, input);
 
         // FIXME: check whether access to 'path' is allowed.
         auto storePath = store.maybeParseStorePath(absPath.string());

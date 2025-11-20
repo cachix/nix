@@ -152,6 +152,19 @@ nix_err nix_eval_state_builder_set_lookup_path(
     NIXC_CATCH_ERRS
 }
 
+nix_err nix_eval_state_builder_set_base_directory(
+    nix_c_context * context, nix_eval_state_builder * builder, const char * path)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (path == nullptr)
+            throw std::runtime_error("base directory path must not be NULL");
+        builder->baseDirectory = nix::PosixSourceAccessor::createAtRoot(path);
+    }
+    NIXC_CATCH_ERRS
+}
+
 EvalState * nix_eval_state_build(nix_c_context * context, nix_eval_state_builder * builder)
 {
     if (context)
