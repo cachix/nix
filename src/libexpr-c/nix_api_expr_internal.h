@@ -9,6 +9,7 @@
 #include "nix/expr/attr-set.hh"
 #include "nix_api_value.h"
 #include "nix/expr/search-path.hh"
+#include "nix/util/source-path.hh"
 
 extern "C" {
 

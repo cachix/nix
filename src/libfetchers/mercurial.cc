@@ -143,7 +143,7 @@ struct MercurialInputScheme : InputScheme
         return res;
     }
 
-    std::optional<std::filesystem::path> getSourcePath(const Input & input) const override
+    std::optional<std::filesystem::path> getSourcePath(const Settings & settings, const Input & input) const override
     {
         auto url = parseURL(getStrAttr(input.attrs, "url"));
         if (url.scheme == "file" && !input.getRef() && !input.getRev())
@@ -152,6 +152,7 @@ struct MercurialInputScheme : InputScheme
     }
 
     void putFile(
+        const Settings & settings,
         const Input & input,
         const CanonPath & path,
         std::string_view contents,
@@ -412,7 +413,7 @@ struct MercurialInputScheme : InputScheme
         return (bool) input.getRev();
     }
 
-    std::optional<std::string> getFingerprint(Store & store, const Input & input) const override
+    std::optional<std::string> getFingerprint(const Settings & settings, Store & store, const Input & input) const override
     {
         if (auto rev = input.getRev())
             return rev->gitRev();
