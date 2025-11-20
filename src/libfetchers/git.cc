@@ -450,7 +450,7 @@ struct GitInputScheme : InputScheme
     void clone(const Settings & settings, Store & store, const Input & input, const std::filesystem::path & destDir)
         const override
     {
-        auto repoInfo = getRepoInfo(input);
+        auto repoInfo = getRepoInfo(input, settings);
 
         OsStrings args = {OS_STR("clone")};
 
@@ -469,18 +469,19 @@ struct GitInputScheme : InputScheme
         runProgram("git", true, args, {}, true);
     }
 
-    std::optional<std::filesystem::path> getSourcePath(const Input & input) const override
+    std::optional<std::filesystem::path> getSourcePath(const Settings & settings, const Input & input) const override
     {
-        return getRepoInfo(input).getPath();
+        return getRepoInfo(input, settings).getPath();
     }
 
     void putFile(
+        const Settings & settings,
         const Input & input,
         const CanonPath & path,
         std::string_view contents,
         std::optional<std::string> commitMsg) const override
     {
-        auto repoInfo = getRepoInfo(input);
+        auto repoInfo = getRepoInfo(input, settings);
         auto repoPath = repoInfo.getPath();
         if (!repoPath)
             throw Error(
@@ -612,7 +613,7 @@ struct GitInputScheme : InputScheme
         return maybeGetBoolAttr(input.attrs, "allRefs").value_or(false);
     }
 
-    RepoInfo getRepoInfo(const Input & input) const
+    RepoInfo getRepoInfo(const Input & input, const Settings & settings) const
     {
         auto checkHashAlgorithm = [&](const std::optional<Hash> & hash) {
             if (hash.has_value() && !(hash->algo == HashAlgorithm::SHA1 || hash->algo == HashAlgorithm::SHA256))
@@ -639,12 +640,7 @@ struct GitInputScheme : InputScheme
             return pathExists(path) && !pathExists(path / ".git");
         };
 
-        // FIXME: here we turn a possibly relative path into an absolute path.
-        // This allows relative git flake inputs to be resolved against the
-        // **current working directory** (as in POSIX), which tends to work out
-        // ok in the context of flakes, but is the wrong behavior,
-        // as it should resolve against the flake.nix base directory instead.
-        //
+        // Resolve relative paths against the base directory if available.
         // See: https://discourse.nixos.org/t/57783 and #9708
         //
         auto maybeUrlFsPathForFileUrl =
@@ -653,14 +649,31 @@ struct GitInputScheme : InputScheme
             auto & path = *maybeUrlFsPathForFileUrl;
 
             if (!path.is_absolute()) {
-                warn(
-                    "Fetching Git repository '%s', which uses a path relative to the current directory. "
-                    "This is not supported and will stop working in a future release. "
-                    "See https://github.com/NixOS/nix/issues/12281 for details.",
-                    url);
+                // Try to resolve relative to base directory if available
+                if (!settings.baseDirectory.get().empty()) {
+                    path = std::filesystem::path(settings.baseDirectory.get()) / path;
+                } else {
+                    // Fallback: warn and use current working directory
+                    warn(
+                        "Fetching Git repository '%s', which uses a path relative to the current directory. "
+                        "To resolve relative paths, evaluate from a Nix file.",
+                        url);
+                    // Keep using std::filesystem::absolute for backward compatibility
+                }
             }
 
-            repoInfo.location = std::filesystem::absolute(path);
+            // If we don't check here for the path existence, then we can give libgit2 any directory
+            // and it will initialize them as git directories.
+            if (!pathExists(path)) {
+                throw Error("The path '%s' does not exist.", path.string());
+            }
+
+            // Now ensure the path is absolute
+            if (path.is_absolute()) {
+                repoInfo.location = path;
+            } else {
+                repoInfo.location = std::filesystem::absolute(path);
+            }
         } else {
             if (maybeUrlFsPathForFileUrl)
                 /* Query parameters are meaningless for file://, but
@@ -1061,7 +1074,7 @@ struct GitInputScheme : InputScheme
     {
         Input input(_input);
 
-        auto repoInfo = getRepoInfo(input);
+        auto repoInfo = getRepoInfo(input, settings);
 
         if (getExportIgnoreAttr(input) && getSubmodulesAttr(input)) {
             /* In this situation, we don't have a git CLI behavior that we can copy.
@@ -1079,7 +1092,7 @@ struct GitInputScheme : InputScheme
         return {accessor, std::move(final)};
     }
 
-    std::optional<std::string> getFingerprint(Store & store, const Input & input) const override
+    std::optional<std::string> getFingerprint(const Settings & settings, Store & store, const Input & input) const override
     {
         auto makeFingerprint = [&](const Hash & rev) {
             return rev.gitRev() + (getSubmodulesAttr(input) ? ";s" : "") + (getExportIgnoreAttr(input) ? ";e" : "")
@@ -1089,7 +1102,7 @@ struct GitInputScheme : InputScheme
         if (auto rev = input.getRev())
             return makeFingerprint(*rev);
         else {
-            auto repoInfo = getRepoInfo(input);
+            auto repoInfo = getRepoInfo(input, settings);
             if (auto repoPath = repoInfo.getPath(); repoPath && repoInfo.workdirInfo.submodules.empty()) {
                 /* Calculate a fingerprint that takes into account the
                    deleted and modified/added files. */

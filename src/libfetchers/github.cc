@@ -373,7 +373,7 @@ struct GitArchiveInputScheme : InputScheme
         return Xp::Flakes;
     }
 
-    std::optional<std::string> getFingerprint(Store & store, const Input & input) const override
+    std::optional<std::string> getFingerprint(const Settings & settings, Store & store, const Input & input) const override
     {
         if (auto rev = input.getRev())
             return rev->gitRev();

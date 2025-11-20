@@ -145,13 +145,13 @@ public:
 
     void clone(const Settings & settings, Store & store, const std::filesystem::path & destDir) const;
 
-    std::optional<std::filesystem::path> getSourcePath() const;
+    std::optional<std::filesystem::path> getSourcePath(const Settings & settings) const;
 
     /**
      * Write a file to this input, for input types that support
      * writing. Optionally commit the change (for e.g. Git inputs).
      */
-    void putFile(const CanonPath & path, std::string_view contents, std::optional<std::string> commitMsg) const;
+    void putFile(const Settings & settings, const CanonPath & path, std::string_view contents, std::optional<std::string> commitMsg) const;
 
     std::string getName() const;
 
@@ -173,7 +173,7 @@ public:
      *
      * This is not a stable identifier between Nix versions, but not guaranteed to change either.
      */
-    std::optional<std::string> getFingerprint(Store & store) const;
+    std::optional<std::string> getFingerprint(const Settings & settings, Store & store) const;
 };
 
 /**
@@ -232,9 +232,10 @@ struct InputScheme
     virtual void
     clone(const Settings & settings, Store & store, const Input & input, const std::filesystem::path & destDir) const;
 
-    virtual std::optional<std::filesystem::path> getSourcePath(const Input & input) const;
+    virtual std::optional<std::filesystem::path> getSourcePath(const Settings & settings, const Input & input) const;
 
     virtual void putFile(
+        const Settings & settings,
         const Input & input,
         const CanonPath & path,
         std::string_view contents,
@@ -253,7 +254,7 @@ struct InputScheme
         return true;
     }
 
-    virtual std::optional<std::string> getFingerprint(Store & store, const Input & input) const
+    virtual std::optional<std::string> getFingerprint(const Settings & settings, Store & store, const Input & input) const
     {
         return std::nullopt;
     }

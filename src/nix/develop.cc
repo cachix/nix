@@ -517,7 +517,7 @@ struct CmdDevelop : Common, MixEnvironment
             // chdir if installable is a flake of type git+file or path
             auto installableFlake = installable.dynamic_pointer_cast<InstallableFlake>();
             if (installableFlake) {
-                auto sourcePath = installableFlake->getLockedFlake()->flake.resolvedRef.input.getSourcePath();
+                auto sourcePath = installableFlake->getLockedFlake()->flake.resolvedRef.input.getSourcePath(fetchSettings);
                 if (sourcePath) {
                     if (chdir(sourcePath->c_str()) == -1) {
                         throw SysError("chdir to %s failed", PathFmt(*sourcePath));
