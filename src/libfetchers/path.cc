@@ -113,6 +113,11 @@ struct PathInputScheme : InputScheme
         if (isAbsolute(path))
             return canonPath(path);
 
+        // Try to resolve relative path using base directory if available
+        if (auto baseDir = maybeGetStrAttr(input.attrs, "__baseDirectory")) {
+            return canonPath(*baseDir + "/" + path);
+        }
+
         throw Error("cannot fetch input '%s' because it uses a relative path", input.to_string());
     }
 

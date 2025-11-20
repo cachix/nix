@@ -464,23 +464,24 @@ struct GitInputScheme : InputScheme
         // well if it's a bare repository we want to force a git fetch rather than copying the folder
         auto isBareRepository = [](PathView path) { return pathExists(path) && !pathExists(path + "/.git"); };
 
-        // FIXME: here we turn a possibly relative path into an absolute path.
-        // This allows relative git flake inputs to be resolved against the
-        // **current working directory** (as in POSIX), which tends to work out
-        // ok in the context of flakes, but is the wrong behavior,
-        // as it should resolve against the flake.nix base directory instead.
-        //
+        // Resolve relative paths against the base directory if available.
         // See: https://discourse.nixos.org/t/57783 and #9708
         //
         if (url.scheme == "file" && !forceHttp && !isBareRepository(renderUrlPathEnsureLegal(url.path))) {
             auto path = renderUrlPathEnsureLegal(url.path);
 
             if (!isAbsolute(path)) {
-                warn(
-                    "Fetching Git repository '%s', which uses a path relative to the current directory. "
-                    "This is not supported and will stop working in a future release. "
-                    "See https://github.com/NixOS/nix/issues/12281 for details.",
-                    url);
+                // Try to resolve relative to base directory if available
+                if (auto baseDir = maybeGetStrAttr(input.attrs, "__baseDirectory")) {
+                    path = *baseDir + "/" + path;
+                } else {
+                    // Fallback: warn and use current working directory
+                    warn(
+                        "Fetching Git repository '%s', which uses a path relative to the current directory. "
+                        "To resolve relative paths, evaluate from a Nix file.",
+                        url);
+                    // Keep using std::filesystem::absolute for backward compatibility
+                }
             }
 
             // If we don't check here for the path existence, then we can give libgit2 any directory
@@ -488,7 +489,13 @@ struct GitInputScheme : InputScheme
             if (!pathExists(path)) {
                 throw Error("The path '%s' does not exist.", path);
             }
-            repoInfo.location = std::filesystem::absolute(path);
+
+            // Now ensure the path is absolute
+            if (isAbsolute(path)) {
+                repoInfo.location = path;
+            } else {
+                repoInfo.location = std::filesystem::absolute(path);
+            }
         } else {
             if (url.scheme == "file")
                 /* Query parameters are meaningless for file://, but

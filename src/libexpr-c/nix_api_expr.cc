@@ -7,6 +7,7 @@
 #include "nix/store/globals.hh"
 #include "nix/expr/eval-settings.hh"
 #include "nix/util/ref.hh"
+#include "nix/util/posix-source-accessor.hh"
 
 #include "nix_api_expr.h"
 #include "nix_api_expr_internal.h"
@@ -168,17 +169,31 @@ nix_err nix_eval_state_builder_set_lookup_path(
     NIXC_CATCH_ERRS
 }
 
+nix_err nix_eval_state_builder_set_base_directory(
+    nix_c_context * context, nix_eval_state_builder * builder, const char * path)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (path == nullptr)
+            throw std::runtime_error("base directory path must not be NULL");
+        builder->baseDirectory = nix::PosixSourceAccessor::createAtRoot(path);
+    }
+    NIXC_CATCH_ERRS
+}
+
 EvalState * nix_eval_state_build(nix_c_context * context, nix_eval_state_builder * builder)
 {
     if (context)
         context->last_err_code = NIX_OK;
     try {
         return unsafe_new_with_self<EvalState>([&](auto * self) {
-            return EvalState{
-                .fetchSettings = std::move(builder->fetchSettings),
-                .settings = std::move(builder->settings),
-                .state = nix::EvalState(builder->lookupPath, builder->store, self->fetchSettings, self->settings),
-            };
+            return EvalState(
+                std::move(builder->fetchSettings),
+                std::move(builder->settings),
+                builder->lookupPath,
+                builder->store,
+                builder->baseDirectory);
         });
     }
     NIXC_CATCH_ERRS_NULL

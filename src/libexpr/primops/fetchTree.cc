@@ -193,6 +193,12 @@ static void fetchTree(
         }
     }
 
+    // Add base directory for resolving relative paths, but only for unlocked inputs.
+    // Locked inputs (from lock files) are already resolved and shouldn't be re-evaluated.
+    if (state.baseDirectory && !input.isLocked()) {
+        input.attrs.insert_or_assign("__baseDirectory", state.baseDirectory->path.abs());
+    }
+
     if (!state.settings.pureEval && !input.isDirect() && experimentalFeatureSettings.isEnabled(Xp::Flakes))
         input = lookupInRegistries(state.store, input, fetchers::UseRegistries::Limited).first;
 

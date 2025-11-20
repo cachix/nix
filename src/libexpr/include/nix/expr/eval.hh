@@ -421,6 +421,12 @@ public:
     ref<fetchers::InputCache> inputCache;
 
     /**
+     * Base directory for resolving relative paths in builtins.fetchTree.
+     * Set when parsing a file or expression.
+     */
+    std::optional<SourcePath> baseDirectory;
+
+    /**
      * Debugger
      */
     ReplExitStatus (*debugRepl)(ref<EvalState> es, const ValMap & extraEnv);

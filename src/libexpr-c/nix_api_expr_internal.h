@@ -7,6 +7,7 @@
 #include "nix/expr/attr-set.hh"
 #include "nix_api_value.h"
 #include "nix/expr/search-path.hh"
+#include "nix/util/source-path.hh"
 
 extern "C" {
 
@@ -16,6 +17,7 @@ struct nix_eval_state_builder
     nix::EvalSettings settings;
     nix::fetchers::Settings fetchSettings;
     nix::LookupPath lookupPath;
+    std::optional<nix::SourcePath> baseDirectory;
     // TODO: make an EvalSettings setting own this instead?
     bool readOnlyMode;
 };
@@ -25,6 +27,21 @@ struct EvalState
     nix::fetchers::Settings fetchSettings;
     nix::EvalSettings settings;
     nix::EvalState state;
+
+    EvalState(
+        nix::fetchers::Settings && fs,
+        nix::EvalSettings && s,
+        const nix::LookupPath & lp,
+        nix::ref<nix::Store> st,
+        const std::optional<nix::SourcePath> & bd)
+      : fetchSettings(std::move(fs)),
+        settings(std::move(s)),
+        state(lp, st, fetchSettings, settings)
+    {
+        if (bd) {
+            state.baseDirectory = bd;
+        }
+    }
 };
 
 struct BindingsBuilder

@@ -213,6 +213,21 @@ nix_err nix_eval_state_builder_set_lookup_path(
     nix_c_context * context, nix_eval_state_builder * builder, const char ** lookupPath);
 
 /**
+ * @brief Set the base directory for resolving relative paths in expressions.
+ *
+ * The base directory is used when parsing expressions to resolve relative paths
+ * in builtins like fetchTree. It should typically be set to the directory containing
+ * the expression being evaluated.
+ *
+ * @param[in] context Optional, stores error information
+ * @param[in] builder The builder to modify.
+ * @param[in] path The absolute path to use as base directory. Must not be NULL.
+ * @return NIX_OK if successful, an error code otherwise.
+ */
+nix_err nix_eval_state_builder_set_base_directory(
+    nix_c_context * context, nix_eval_state_builder * builder, const char * path);
+
+/**
  * @brief Create a new Nix language evaluator state
  *
  * Remember to nix_eval_state_builder_free after building the state.
