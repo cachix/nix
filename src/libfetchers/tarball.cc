@@ -513,7 +513,7 @@ struct TarballInputScheme : CurlInputScheme
         return {result.accessor, input};
     }
 
-    std::optional<std::string> getFingerprint(Store & store, const Input & input) const override
+    std::optional<std::string> getFingerprint(const Settings & settings, Store & store, const Input & input) const override
     {
         if (auto narHash = input.getNarHash())
             return narHash->to_string(HashFormat::SRI, true);

@@ -7,6 +7,7 @@
 #include "nix/store/globals.hh"
 #include "nix/expr/eval-settings.hh"
 #include "nix/util/ref.hh"
+#include "nix/util/posix-source-accessor.hh"
 
 #include "nix_api_expr.h"
 #include "nix_api_expr_internal.h"
@@ -172,6 +173,19 @@ nix_err nix_eval_state_builder_set_lookup_path(
             for (size_t i = 0; lookupPath_c[i] != nullptr; i++)
                 lookupPath.push_back(lookupPath_c[i]);
         builder->lookupPath = nix::LookupPath::parse(lookupPath);
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_eval_state_builder_set_base_directory(
+    nix_c_context * context, nix_eval_state_builder * builder, const char * path)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (path == nullptr)
+            throw std::runtime_error("base directory path must not be NULL");
+        builder->baseDirectory = nix::PosixSourceAccessor::createAtRoot(path);
     }
     NIXC_CATCH_ERRS
 }

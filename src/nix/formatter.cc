@@ -80,7 +80,7 @@ struct CmdFormatterRun : MixFormatter, MixJSON
         auto & installable = InstallableValue::require(*installable_);
         auto app = installable.toApp(*evalState).resolve(evalStore, store);
 
-        auto maybeFlakeDir = installable_->flakeRef.input.getSourcePath();
+        auto maybeFlakeDir = installable_->flakeRef.input.getSourcePath(fetchSettings);
         assert(maybeFlakeDir.has_value());
         auto flakeDir = maybeFlakeDir.value();
 
