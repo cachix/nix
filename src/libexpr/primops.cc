@@ -1216,6 +1216,14 @@ static void prim_getEnv(EvalState & state, const PosIdx pos, Value ** args, Valu
     std::string name(
         state.forceStringNoCtx(*args[0], pos, "while evaluating the first argument passed to builtins.getEnv"));
     printTalkative("devenv getEnv: '%1%'", name);
+
+    // Check overrides first (works even in pure-eval mode)
+    auto it = state.settings.envOverrides.find(name);
+    if (it != state.settings.envOverrides.end()) {
+        v.mkString(it->second, state.mem);
+        return;
+    }
+
     v.mkString(state.settings.restrictEval || state.settings.pureEval ? "" : getEnv(name).value_or(""), state.mem);
 }
 
