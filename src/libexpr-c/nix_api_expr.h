@@ -228,6 +228,23 @@ nix_err nix_eval_state_builder_set_base_directory(
     nix_c_context * context, nix_eval_state_builder * builder, const char * path);
 
 /**
+ * @brief Set an environment variable override for pure evaluation mode.
+ *
+ * Environment variable overrides allow specific env vars to be accessible
+ * via builtins.getEnv even when pure evaluation mode is enabled.
+ * This is useful for passing configuration like NIXPKGS_CONFIG without
+ * breaking evaluation purity.
+ *
+ * @param[in] context Optional, stores error information
+ * @param[in] builder The builder to modify.
+ * @param[in] name The environment variable name.
+ * @param[in] value The value to return for this env var.
+ * @return NIX_OK if successful, an error code otherwise.
+ */
+nix_err nix_eval_state_builder_set_env_override(
+    nix_c_context * context, nix_eval_state_builder * builder, const char * name, const char * value);
+
+/**
  * @brief Create a new Nix language evaluator state
  *
  * Remember to nix_eval_state_builder_free after building the state.

@@ -177,7 +177,22 @@ nix_err nix_eval_state_builder_set_base_directory(
     try {
         if (path == nullptr)
             throw std::runtime_error("base directory path must not be NULL");
-        builder->baseDirectory = nix::PosixSourceAccessor::createAtRoot(path);
+        builder->fetchSettings.baseDirectory.assign(path);
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_eval_state_builder_set_env_override(
+    nix_c_context * context, nix_eval_state_builder * builder, const char * name, const char * value)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (name == nullptr)
+            throw std::runtime_error("environment variable name must not be NULL");
+        if (value == nullptr)
+            throw std::runtime_error("environment variable value must not be NULL");
+        builder->settings.envOverrides[name] = value;
     }
     NIXC_CATCH_ERRS
 }
@@ -192,8 +207,7 @@ EvalState * nix_eval_state_build(nix_c_context * context, nix_eval_state_builder
                 std::move(builder->fetchSettings),
                 std::move(builder->settings),
                 builder->lookupPath,
-                builder->store,
-                builder->baseDirectory);
+                builder->store);
         });
     }
     NIXC_CATCH_ERRS_NULL

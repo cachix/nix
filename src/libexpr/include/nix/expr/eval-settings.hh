@@ -52,6 +52,12 @@ struct EvalSettings : Config
 
     LookupPathHooks lookupPathHooks;
 
+    /**
+     * Environment variable overrides that work even in pure evaluation mode.
+     * Used by the C API to inject specific env vars without breaking purity.
+     */
+    StringMap envOverrides;
+
     std::vector<PrimOp> extraPrimOps;
 
     Setting<bool> enableNativeCode{this, false, "allow-unsafe-native-code-during-evaluation", R"(
