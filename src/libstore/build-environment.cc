@@ -254,6 +254,30 @@ std::pair<StorePath, BuildEnvironment> BuildEnvironment::getDevEnvironment(ref<S
         if (lstat(outPathS).st_size) {
             // Read and parse the JSON output
             auto buildEnv = BuildEnvironment::parseJSON(readFile(outPathS));
+
+            // Filter out sandbox-specific variables that shouldn't leak into the shell
+            // (same as ignoreVars in develop.cc)
+            for (const auto & var : StringSet{
+                "BASHOPTS",
+                "HOME",
+                "NIX_BUILD_TOP",
+                "NIX_ENFORCE_PURITY",
+                "NIX_LOG_FD",
+                "NIX_REMOTE",
+                "PPID",
+                "SHELLOPTS",
+                "SSL_CERT_FILE",
+                "TEMP",
+                "TEMPDIR",
+                "TERM",
+                "TMP",
+                "TMPDIR",
+                "TZ",
+                "UID",
+            }) {
+                buildEnv.vars.erase(var);
+            }
+
             return {outPath, std::move(buildEnv)};
         }
     }
