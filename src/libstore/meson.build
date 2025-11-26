@@ -168,6 +168,7 @@ generated_headers = []
 foreach header : [
   'schema.sql',
   'ca-specific-schema.sql',
+  'get-env.sh',
 ]
   generated_headers += gen_header.process(header)
 endforeach

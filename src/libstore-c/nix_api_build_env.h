@@ -166,13 +166,45 @@ nix_err nix_build_env_get_attrs_sh(
  * applied when building that derivation. This reads the .drv file and creates
  * a BuildEnvironment with the variables and functions defined for the build.
  *
+ * Note: This only extracts the raw environment variables from the derivation.
+ * It does NOT run stdenv setup hooks, so variables like PKG_CONFIG_PATH that
+ * are computed by setup hooks will not be set. For the fully-expanded
+ * environment, use nix_get_dev_environment instead.
+ *
  * @param[out] context Optional, stores error information
  * @param[in] store Nix store reference
  * @param[in] drv_path The derivation store path to extract environment from
  * @return A new BuildEnvironment extracted from the derivation, or NULL on error
- * @see nix_build_env_free, nix_store_parse_path
+ * @see nix_build_env_free, nix_store_parse_path, nix_get_dev_environment
  */
 nix_build_env * nix_build_env_from_derivation(
+    nix_c_context * context,
+    Store * store,
+    const StorePath * drv_path);
+
+/**
+ * @brief Get the fully-expanded development environment from a derivation.
+ *
+ * Unlike nix_build_env_from_derivation which only reads the raw .drv file,
+ * this function actually builds a modified derivation that runs the stdenv
+ * setup hooks and captures the resulting environment. This is equivalent to
+ * what `nix print-dev-env` does.
+ *
+ * The function:
+ * 1. Creates a modified derivation that runs a special script instead of the builder
+ * 2. Builds that derivation to capture the environment after setup hooks run
+ * 3. Parses the output JSON and returns the BuildEnvironment
+ *
+ * This is the recommended way to get the environment for interactive shell use,
+ * as it includes computed variables like PKG_CONFIG_PATH, PATH additions, etc.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] store Nix store reference (used for building)
+ * @param[in] drv_path The derivation store path
+ * @return A new BuildEnvironment with fully-expanded variables, or NULL on error
+ * @see nix_build_env_free, nix_build_env_from_derivation
+ */
+nix_build_env * nix_get_dev_environment(
     nix_c_context * context,
     Store * store,
     const StorePath * drv_path);
