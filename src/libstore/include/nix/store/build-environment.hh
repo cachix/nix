@@ -92,9 +92,12 @@ struct BuildEnvironment
     /**
      * @brief Create a BuildEnvironment from a Derivation.
      *
-     * Extracts environment variables and structured attributes from a derivation
-     * to create a BuildEnvironment. This is useful for getting the build environment
-     * that would be active when building a given derivation.
+     * Extracts environment variables and structured attributes directly from a derivation
+     * without running setup hooks. This gives you the raw environment as defined in the
+     * .drv file.
+     *
+     * Note: Variables like PKG_CONFIG_PATH that are computed by setup hooks will NOT
+     * be present. For the fully-expanded environment, use getDevEnvironment() instead.
      *
      * @param store The Nix store (used for some store-specific operations)
      * @param drv The derivation to extract the environment from
@@ -102,6 +105,26 @@ struct BuildEnvironment
      * @throws Error if extraction fails
      */
     static BuildEnvironment fromDerivation(const Store & store, const Derivation & drv);
+
+    /**
+     * @brief Get the fully-expanded development environment for a derivation.
+     *
+     * This builds a modified version of the derivation that runs stdenv setup hooks
+     * and captures the resulting environment. This is equivalent to what
+     * `nix print-dev-env` does.
+     *
+     * Unlike fromDerivation(), this method:
+     * - Runs all stdenv setup hooks
+     * - Computes derived variables like PKG_CONFIG_PATH, PATH additions, etc.
+     * - Captures bash functions defined by the setup
+     *
+     * @param store The Nix store (used for building)
+     * @param drvPath The store path of the derivation
+     * @return A pair of (output StorePath, BuildEnvironment) - the path can be used
+     *         for profile/GC root management, the BuildEnvironment contains the variables
+     * @throws Error if the derivation doesn't use bash as builder, or if build fails
+     */
+    static std::pair<StorePath, BuildEnvironment> getDevEnvironment(ref<Store> store, const StorePath & drvPath);
 
     /**
      * @brief Convert the BuildEnvironment to JSON.

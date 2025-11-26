@@ -138,4 +138,21 @@ nix_build_env * nix_build_env_from_derivation(
     NIXC_CATCH_ERRS_NULL
 }
 
+nix_build_env * nix_get_dev_environment(
+    nix_c_context * context,
+    Store * store,
+    const StorePath * drv_path)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        // Use the shared implementation that builds the modified derivation
+        // and captures the fully-expanded environment
+        auto [_outPath, buildEnv] = nix::BuildEnvironment::getDevEnvironment(store->ptr, drv_path->path);
+
+        return new nix_build_env{nix::make_ref<nix::BuildEnvironment>(std::move(buildEnv))};
+    }
+    NIXC_CATCH_ERRS_NULL
+}
+
 } // extern "C"

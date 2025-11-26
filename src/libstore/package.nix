@@ -56,6 +56,7 @@ mkMesonLibrary (finalAttrs: {
     (fileset.fileFilter (file: file.hasExt "sb") ./.)
     (fileset.fileFilter (file: file.hasExt "md") ./.)
     (fileset.fileFilter (file: file.hasExt "sql") ./.)
+    (fileset.fileFilter (file: file.hasExt "sh") ./.)
   ];
 
   nativeBuildInputs =
