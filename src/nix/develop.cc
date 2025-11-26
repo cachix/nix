@@ -43,10 +43,6 @@ static DevelopSettings developSettings;
 
 static GlobalConfig::Register rDevelopSettings(&developSettings);
 
-const static std::string getEnvSh =
-#include "get-env.sh.gen.hh"
-    ;
-
 /* Given an existing derivation, return the shell environment as
    initialised by stdenv's setup script. We do this by building a
    modified derivation with the same dependencies and nearly the same
@@ -54,79 +50,8 @@ const static std::string getEnvSh =
    environment to a file and exits. */
 static StorePath getDerivationEnvironment(ref<Store> store, ref<Store> evalStore, const StorePath & drvPath)
 {
-    auto drv = evalStore->derivationFromPath(drvPath);
-
-    auto builder = baseNameOf(drv.builder);
-    if (builder != "bash")
-        throw Error("'nix develop' only works on derivations that use 'bash' as their builder");
-
-    auto getEnvShPath = ({
-        StringSource source{getEnvSh};
-        evalStore->addToStoreFromDump(
-            source,
-            "get-env.sh",
-            FileSerialisationMethod::Flat,
-            ContentAddressMethod::Raw::Text,
-            HashAlgorithm::SHA256,
-            {});
-    });
-
-    drv.args = {store->printStorePath(getEnvShPath)};
-
-    /* Remove derivation checks. */
-    drv.env.erase("allowedReferences");
-    drv.env.erase("allowedRequisites");
-    drv.env.erase("disallowedReferences");
-    drv.env.erase("disallowedRequisites");
-    drv.env.erase("name");
-
-    /* Rehash and write the derivation. FIXME: would be nice to use
-       'buildDerivation', but that's privileged. */
-    drv.name += "-env";
-    drv.env.emplace("name", drv.name);
-    drv.inputSrcs.insert(std::move(getEnvShPath));
-    if (experimentalFeatureSettings.isEnabled(Xp::CaDerivations)) {
-        for (auto & output : drv.outputs) {
-            output.second = DerivationOutput::Deferred{}, drv.env[output.first] = hashPlaceholder(output.first);
-        }
-    } else {
-        for (auto & output : drv.outputs) {
-            output.second = DerivationOutput::Deferred{};
-            drv.env[output.first] = "";
-        }
-        auto hashesModulo = hashDerivationModulo(*evalStore, drv, true);
-
-        for (auto & output : drv.outputs) {
-            Hash h = hashesModulo.hashes.at(output.first);
-            auto outPath = store->makeOutputPath(output.first, h, drv.name);
-            output.second = DerivationOutput::InputAddressed{
-                .path = outPath,
-            };
-            drv.env[output.first] = store->printStorePath(outPath);
-        }
-    }
-
-    auto shellDrvPath = writeDerivation(*evalStore, drv);
-
-    /* Build the derivation. */
-    store->buildPaths(
-        {DerivedPath::Built{
-            .drvPath = makeConstantStorePathRef(shellDrvPath),
-            .outputs = OutputsSpec::All{},
-        }},
-        bmNormal,
-        evalStore);
-
-    for (auto & [_0, optPath] : evalStore->queryPartialDerivationOutputMap(shellDrvPath)) {
-        assert(optPath);
-        auto & outPath = *optPath;
-        assert(store->isValidPath(outPath));
-        auto outPathS = store->toRealPath(outPath);
-        if (lstat(outPathS).st_size)
-            return outPath;
-    }
-
-    throw Error("get-env.sh failed to produce an environment");
+    auto [outPath, _buildEnv] = BuildEnvironment::getDevEnvironment(evalStore, drvPath);
+    return outPath;
 }
 
 struct Common : InstallableCommand, MixProfile
