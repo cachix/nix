@@ -8,6 +8,7 @@
 #include "nix/main/shared.hh"
 #include "nix/expr/eval-cache.hh"
 #include "nix/expr/attr-path.hh"
+#include "nix/expr/search.hh"
 #include "nix/util/hilite.hh"
 #include "nix/util/strings-inline.hh"
 
@@ -89,105 +90,52 @@ struct CmdSearch : InstallableValueCommand, MixJSON
 
         uint64_t results = 0;
 
-        std::function<void(eval_cache::AttrCursor & cursor, const AttrPath & attrPath, bool initialRecurse)> visit;
-
-        visit = [&](eval_cache::AttrCursor & cursor, const AttrPath & attrPath, bool initialRecurse) {
-            auto attrPathS = state->symbols.resolve({attrPath});
-            auto attrPathStr = attrPath.to_string(*state);
-
-            Activity act(*logger, lvlInfo, actUnknown, fmt("evaluating '%s'", attrPathStr));
-            try {
-                auto recurse = [&]() {
-                    for (const auto & attr : cursor.getAttrs()) {
-                        auto cursor2 = cursor.getAttr(state->symbols[attr]);
-                        auto attrPath2(attrPath);
-                        attrPath2.push_back(attr);
-                        visit(*cursor2, attrPath2, false);
-                    }
-                };
-
-                if (cursor.isDerivation()) {
-                    DrvName name(cursor.getAttr(state->s.name)->getString());
-
-                    auto aMeta = cursor.maybeGetAttr(state->s.meta);
-                    auto aDescription = aMeta ? aMeta->maybeGetAttr(state->s.description) : nullptr;
-                    auto description = aDescription ? aDescription->getString() : "";
-                    std::replace(description.begin(), description.end(), '\n', ' ');
-
-                    std::vector<boost::smatch> attrPathMatches;
-                    std::vector<boost::smatch> descriptionMatches;
-                    std::vector<boost::smatch> nameMatches;
-                    bool found = false;
-
-                    for (auto & regex : excludeRegexes) {
-                        if (boost::regex_search(attrPathStr, regex) || boost::regex_search(name.name, regex)
-                            || boost::regex_search(description, regex))
-                            return;
-                    }
-
-                    for (auto & regex : regexes) {
-                        found = false;
-                        auto addAll = [&found](boost::sregex_iterator it, std::vector<boost::smatch> & vec) {
-                            const auto end = boost::sregex_iterator();
-                            while (it != end) {
-                                vec.push_back(*it++);
-                                found = true;
-                            }
+        for (auto & cursor : installable->getCursors(*state)) {
+            searchDerivations(
+                *state,
+                *cursor,
+                regexes,
+                excludeRegexes,
+                [&](const SearchMatch & match) {
+                    results++;
+                    if (json) {
+                        (*jsonOut)[match.attrPath] = {
+                            {"pname", match.pname},
+                            {"version", match.version},
+                            {"description", match.description},
                         };
-
-                        addAll(boost::sregex_iterator(attrPathStr.begin(), attrPathStr.end(), regex), attrPathMatches);
-                        addAll(boost::sregex_iterator(name.name.begin(), name.name.end(), regex), nameMatches);
-                        addAll(
-                            boost::sregex_iterator(description.begin(), description.end(), regex), descriptionMatches);
-
-                        if (!found)
-                            break;
-                    }
-
-                    if (found) {
-                        results++;
-                        if (json) {
-                            (*jsonOut)[attrPathStr] = {
-                                {"pname", name.name},
-                                {"version", name.version},
-                                {"description", description},
+                    } else {
+                        std::vector<boost::smatch> attrPathMatches;
+                        std::vector<boost::smatch> descriptionMatches;
+                        for (auto & regex : regexes) {
+                            auto addAll = [](boost::sregex_iterator it, std::vector<boost::smatch> & vec) {
+                                const auto end = boost::sregex_iterator();
+                                while (it != end)
+                                    vec.push_back(*it++);
                             };
-                        } else {
-                            if (results > 1)
-                                logger->cout("");
-                            logger->cout(
-                                "* %s%s",
-                                wrap("\e[0;1m", hiliteMatches(attrPathStr, attrPathMatches, ANSI_GREEN, "\e[0;1m")),
-                                optionalBracket(" (", name.version, ")"));
-                            if (description != "")
-                                logger->cout(
-                                    "  %s", hiliteMatches(description, descriptionMatches, ANSI_GREEN, ANSI_NORMAL));
+                            addAll(
+                                boost::sregex_iterator(match.attrPath.begin(), match.attrPath.end(), regex),
+                                attrPathMatches);
+                            addAll(
+                                boost::sregex_iterator(match.description.begin(), match.description.end(), regex),
+                                descriptionMatches);
                         }
+
+                        if (results > 1)
+                            logger->cout("");
+                        logger->cout(
+                            "* %s%s",
+                            wrap("\e[0;1m", hiliteMatches(match.attrPath, attrPathMatches, ANSI_GREEN, "\e[0;1m")),
+                            optionalBracket(" (", match.version, ")"));
+                        if (match.description != "")
+                            logger->cout(
+                                "  %s",
+                                hiliteMatches(match.description, descriptionMatches, ANSI_GREEN, ANSI_NORMAL));
                     }
-                }
-
-                else if (
-                    attrPath.size() == 0 || (attrPathS[0] == "legacyPackages" && attrPath.size() <= 2)
-                    || (attrPathS[0] == "packages" && attrPath.size() <= 2))
-                    recurse();
-
-                else if (initialRecurse)
-                    recurse();
-
-                else if (attrPathS[0] == "legacyPackages" && attrPath.size() > 2) {
-                    auto attr = cursor.maybeGetAttr(state->s.recurseForDerivations);
-                    if (attr && attr->getBool())
-                        recurse();
-                }
-
-            } catch (EvalError & e) {
-                if (!(attrPath.size() > 0 && attrPathS[0] == "legacyPackages"))
-                    throw;
-            }
-        };
-
-        for (auto & cursor : installable->getCursors(*state))
-            visit(*cursor, cursor->getAttrPath(), true);
+                    return true;
+                },
+                3);
+        }
 
         if (json)
             printJSON(*jsonOut);
