@@ -31,17 +31,21 @@ subdir('nix-meson-build-support/common')
 subdir('nix-meson-build-support/asan-options')
 
 sources = files(
+  'nix_api_attr_cursor.cc',
   'nix_api_expr.cc',
   'nix_api_external.cc',
+  'nix_api_search.cc',
   'nix_api_value.cc',
 )
 
 include_dirs = [ include_directories('.') ]
 
 headers = files(
+  'nix_api_attr_cursor.h',
   'nix_api_expr.h',
   'nix_api_expr_internal.h',
   'nix_api_external.h',
+  'nix_api_search.h',
   'nix_api_value.h',
 )
 
