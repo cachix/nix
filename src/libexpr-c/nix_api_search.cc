@@ -1,0 +1,92 @@
+#include "nix_api_search.h"
+#include "nix_api_attr_cursor.h"
+#include "nix_api_attr_cursor_internal.h"
+#include "nix_api_util_internal.h"
+
+#include "nix/expr/search.hh"
+
+#include <string>
+#include <vector>
+
+struct nix_search_params {
+    std::vector<boost::regex> includeRegexes;
+    std::vector<boost::regex> excludeRegexes;
+};
+
+nix_search_params * nix_search_params_new(nix_c_context * context)
+{
+    if (context)
+        nix_clear_err(context);
+    try {
+        return new nix_search_params();
+    }
+    NIXC_CATCH_ERRS_NULL
+}
+
+void nix_search_params_free(nix_search_params * params)
+{
+    delete params;
+}
+
+nix_err nix_search_params_add_regex(nix_c_context * context, nix_search_params * params, const char * pattern)
+{
+    if (context)
+        nix_clear_err(context);
+    try {
+        params->includeRegexes.emplace_back(pattern, boost::regex::extended | boost::regex::icase);
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_search_params_add_exclude(nix_c_context * context, nix_search_params * params, const char * pattern)
+{
+    if (context)
+        nix_clear_err(context);
+    try {
+        params->excludeRegexes.emplace_back(pattern, boost::regex::extended | boost::regex::icase);
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_search(
+    nix_c_context * context,
+    nix_attr_cursor * cursor,
+    nix_search_params * params,
+    nix_search_callback callback,
+    void * user_data)
+{
+    if (context)
+        nix_clear_err(context);
+    try {
+        auto & state = cursor->cache->state;
+
+        // Use empty params if none provided
+        nix_search_params defaultParams;
+        nix_search_params * p = params ? params : &defaultParams;
+
+        bool continueSearch = true;
+
+        nix::searchDerivations(
+            state, *cursor->cursor, p->includeRegexes, p->excludeRegexes,
+            [&](const nix::SearchMatch & match) {
+                if (!continueSearch)
+                    return false;
+
+                nix_search_result result;
+                result.attr_path = match.attrPath.c_str();
+                result.name = match.pname.c_str();
+                result.version = match.version.c_str();
+                result.description = match.description.c_str();
+
+                continueSearch = callback(&result, user_data);
+                return continueSearch;
+            },
+            1 // recurseDepth - limit depth to reduce memory usage
+        );
+
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}

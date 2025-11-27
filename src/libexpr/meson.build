@@ -166,6 +166,7 @@ sources = files(
   'print-ambiguous.cc',
   'print.cc',
   'register-library-versions.cc',
+  'search.cc',
   'search-path.cc',
   'value-to-json.cc',
   'value-to-xml.cc',
