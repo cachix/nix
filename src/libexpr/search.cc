@@ -80,8 +80,8 @@ void searchDerivations(
                 }
             }
 
-        } catch (EvalError &) {
-            // Silently ignore eval errors (broken packages)
+        } catch (Error &) {
+            // Silently ignore errors (broken packages, missing paths, etc.)
         }
     };
 
