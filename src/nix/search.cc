@@ -9,6 +9,7 @@
 #include "nix/main/shared.hh"
 #include "nix/expr/eval-cache.hh"
 #include "nix/expr/attr-path.hh"
+#include "nix/expr/search.hh"
 #include "nix/util/hilite.hh"
 #include "nix/util/strings-inline.hh"
 
@@ -90,104 +91,53 @@ struct CmdSearch : InstallableValueCommand, MixJSON
 
         uint64_t results = 0;
 
-        std::function<void(eval_cache::AttrCursor & cursor, const AttrPath & attrPath, bool initialRecurse)> visit;
-
-        visit = [&](eval_cache::AttrCursor & cursor, const AttrPath & attrPath, bool initialRecurse) {
-            auto attrPathS = state->symbols.resolve({attrPath});
-            auto attrPathStr = attrPath.to_string(*state);
-
-            Activity act(*logger, lvlInfo, actUnknown, fmt("evaluating '%s'", attrPathStr));
-            try {
-                auto recurse = [&]() {
-                    for (const auto & attr : cursor.getAttrs()) {
-                        auto cursor2 = cursor.getAttr(state->symbols[attr]);
-                        auto attrPath2(attrPath);
-                        attrPath2.push_back(attr);
-                        visit(*cursor2, attrPath2, false);
-                    }
-                };
-
-                if (cursor.isDerivation()) {
-                    DrvName name(cursor.getAttr(state->s.name)->getString());
-
-                    auto aMeta = cursor.maybeGetAttr(state->s.meta);
-                    auto aDescription = aMeta ? aMeta->maybeGetAttr(state->s.description) : nullptr;
-                    auto description = aDescription ? aDescription->getString() : "";
-                    std::replace(description.begin(), description.end(), '\n', ' ');
-
-                    std::vector<std::smatch> attrPathMatches;
-                    std::vector<std::smatch> descriptionMatches;
-                    std::vector<std::smatch> nameMatches;
-                    bool found = false;
-
-                    for (auto & regex : excludeRegexes) {
-                        if (std::regex_search(attrPathStr, regex) || std::regex_search(name.name, regex)
-                            || std::regex_search(description, regex))
-                            return;
-                    }
-
-                    for (auto & regex : regexes) {
-                        found = false;
-                        auto addAll = [&found](std::sregex_iterator it, std::vector<std::smatch> & vec) {
-                            const auto end = std::sregex_iterator();
-                            while (it != end) {
-                                vec.push_back(*it++);
-                                found = true;
-                            }
+        for (auto & cursor : installable->getCursors(*state)) {
+            // Use depth=3 for flake compatibility: installable -> legacyPackages/packages -> system -> packages
+            searchDerivations(
+                *state, *cursor, regexes, excludeRegexes,
+                [&](const SearchMatch & match) {
+                    results++;
+                    if (json) {
+                        (*jsonOut)[match.attrPath] = {
+                            {"pname", match.pname},
+                            {"version", match.version},
+                            {"description", match.description},
                         };
-
-                        addAll(std::sregex_iterator(attrPathStr.begin(), attrPathStr.end(), regex), attrPathMatches);
-                        addAll(std::sregex_iterator(name.name.begin(), name.name.end(), regex), nameMatches);
-                        addAll(std::sregex_iterator(description.begin(), description.end(), regex), descriptionMatches);
-
-                        if (!found)
-                            break;
-                    }
-
-                    if (found) {
-                        results++;
-                        if (json) {
-                            (*jsonOut)[attrPathStr] = {
-                                {"pname", name.name},
-                                {"version", name.version},
-                                {"description", description},
+                    } else {
+                        // Re-run regexes to get match positions for highlighting
+                        std::vector<std::smatch> attrPathMatches;
+                        std::vector<std::smatch> descriptionMatches;
+                        for (auto & regex : regexes) {
+                            auto addAll = [](std::sregex_iterator it, std::vector<std::smatch> & vec) {
+                                const auto end = std::sregex_iterator();
+                                while (it != end) {
+                                    vec.push_back(*it++);
+                                }
                             };
-                        } else {
-                            if (results > 1)
-                                logger->cout("");
-                            logger->cout(
-                                "* %s%s",
-                                wrap("\e[0;1m", hiliteMatches(attrPathStr, attrPathMatches, ANSI_GREEN, "\e[0;1m")),
-                                optionalBracket(" (", name.version, ")"));
-                            if (description != "")
-                                logger->cout(
-                                    "  %s", hiliteMatches(description, descriptionMatches, ANSI_GREEN, ANSI_NORMAL));
+                            addAll(
+                                std::sregex_iterator(match.attrPath.begin(), match.attrPath.end(), regex),
+                                attrPathMatches);
+                            addAll(
+                                std::sregex_iterator(match.description.begin(), match.description.end(), regex),
+                                descriptionMatches);
                         }
+
+                        if (results > 1)
+                            logger->cout("");
+                        logger->cout(
+                            "* %s%s",
+                            wrap("\e[0;1m", hiliteMatches(match.attrPath, attrPathMatches, ANSI_GREEN, "\e[0;1m")),
+                            match.version != "" ? " (" + match.version + ")" : "");
+                        if (match.description != "")
+                            logger->cout(
+                                "  %s",
+                                hiliteMatches(match.description, descriptionMatches, ANSI_GREEN, ANSI_NORMAL));
                     }
-                }
-
-                else if (
-                    attrPath.size() == 0 || (attrPathS[0] == "legacyPackages" && attrPath.size() <= 2)
-                    || (attrPathS[0] == "packages" && attrPath.size() <= 2))
-                    recurse();
-
-                else if (initialRecurse)
-                    recurse();
-
-                else if (attrPathS[0] == "legacyPackages" && attrPath.size() > 2) {
-                    auto attr = cursor.maybeGetAttr(state->s.recurseForDerivations);
-                    if (attr && attr->getBool())
-                        recurse();
-                }
-
-            } catch (EvalError & e) {
-                if (!(attrPath.size() > 0 && attrPathS[0] == "legacyPackages"))
-                    throw;
-            }
-        };
-
-        for (auto & cursor : installable->getCursors(*state))
-            visit(*cursor, cursor->getAttrPath(), true);
+                    return true; // continue searching
+                },
+                3 // recurseDepth for flake compatibility
+            );
+        }
 
         if (json)
             printJSON(*jsonOut);
