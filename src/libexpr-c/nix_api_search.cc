@@ -6,6 +6,7 @@
 #include "nix/store/names.hh"
 
 #include <algorithm>
+#include <cstdio>
 #include <functional>
 #include <regex>
 #include <string>
@@ -60,9 +61,12 @@ nix_err nix_search(
     nix_search_callback callback,
     void * user_data)
 {
+    fprintf(stderr, "DEBUG C++: nix_search called, cursor=%p\n", (void*)cursor);
     if (context) nix_clear_err(context);
     try {
+        fprintf(stderr, "DEBUG C++: accessing cursor->cache, cache=%p\n", (void*)cursor->cache);
         auto & state = cursor->cache->state;
+        fprintf(stderr, "DEBUG C++: got state reference\n");
 
         // Use empty params if none provided
         nix_search_params defaultParams;
