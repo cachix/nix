@@ -121,7 +121,13 @@ nix_err nix_search(
                         return;
                     }
                     fprintf(stderr, "DEBUG C++: got name attr, getting string\n");
-                    auto nameStr = nameAttr->getString();
+                    std::string nameStr;
+                    try {
+                        nameStr = nameAttr->getString();
+                    } catch (std::exception & e) {
+                        fprintf(stderr, "DEBUG C++: getString threw: %s\n", e.what());
+                        return;
+                    }
                     fprintf(stderr, "DEBUG C++: name string = %s\n", nameStr.c_str());
                     nix::DrvName drvName(nameStr);
 
