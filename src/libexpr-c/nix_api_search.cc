@@ -5,6 +5,7 @@
 
 #include "nix/expr/search.hh"
 
+#include <cstdio>
 #include <regex>
 #include <string>
 #include <vector>
@@ -58,20 +59,28 @@ nix_err nix_search(
     nix_search_callback callback,
     void * user_data)
 {
+    fprintf(stderr, "DEBUG: nix_search called, cursor=%p, params=%p, callback=%p\n",
+            (void*)cursor, (void*)params, (void*)callback);
     if (context)
         nix_clear_err(context);
     try {
+        fprintf(stderr, "DEBUG: accessing cursor->cache\n");
         auto & state = cursor->cache->state;
+        fprintf(stderr, "DEBUG: got state\n");
 
         // Use empty params if none provided
         nix_search_params defaultParams;
         nix_search_params * p = params ? params : &defaultParams;
 
         bool continueSearch = true;
+        int matchCount = 0;
 
+        fprintf(stderr, "DEBUG: calling searchDerivations\n");
         nix::searchDerivations(
             state, *cursor->cursor, p->includeRegexes, p->excludeRegexes,
             [&](const nix::SearchMatch & match) {
+                matchCount++;
+                fprintf(stderr, "DEBUG: match %d: %s\n", matchCount, match.attrPath.c_str());
                 if (!continueSearch)
                     return false;
 
@@ -87,6 +96,7 @@ nix_err nix_search(
             1 // recurseDepth - default for generic expressions
         );
 
+        fprintf(stderr, "DEBUG: searchDerivations completed, total matches: %d\n", matchCount);
         return NIX_OK;
     }
     NIXC_CATCH_ERRS
