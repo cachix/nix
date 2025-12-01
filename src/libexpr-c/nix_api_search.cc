@@ -84,7 +84,9 @@ nix_err nix_search(
             fprintf(stderr, "DEBUG C++: visit called, attrPath.size()=%zu, initialRecurse=%d\n", attrPath.size(), initialRecurse);
             if (!continueSearch) return;
 
+            fprintf(stderr, "DEBUG C++: resolving attrPath\n");
             auto attrPathS = state.symbols.resolve(attrPath);
+            fprintf(stderr, "DEBUG C++: attrPath resolved, checking isDerivation\n");
 
             try {
                 auto recurse = [&]() {
@@ -97,8 +99,11 @@ nix_err nix_search(
                     }
                 };
 
-                if (cur.isDerivation()) {
+                bool isDrv = cur.isDerivation();
+                fprintf(stderr, "DEBUG C++: isDerivation=%d\n", isDrv);
+                if (isDrv) {
                     // Get package name attribute
+                    fprintf(stderr, "DEBUG C++: is derivation, getting name\n");
                     auto nameAttr = cur.maybeGetAttr(state.s.name);
                     if (!nameAttr) return;
 
@@ -157,15 +162,19 @@ nix_err nix_search(
                 }
                 else if (attrPath.size() == 0) {
                     // Root level - always recurse
+                    fprintf(stderr, "DEBUG C++: root level, recursing\n");
                     recurse();
+                    fprintf(stderr, "DEBUG C++: root level recurse done\n");
                 }
                 else if ((attrPathS[0] == "legacyPackages" && attrPath.size() <= 2) ||
                          (attrPathS[0] == "packages" && attrPath.size() <= 2)) {
                     // First two levels of packages/legacyPackages - always recurse
+                    fprintf(stderr, "DEBUG C++: packages level, recursing\n");
                     recurse();
                 }
                 else if (initialRecurse) {
                     // Initial recurse flag set - recurse once
+                    fprintf(stderr, "DEBUG C++: initial recurse\n");
                     recurse();
                 }
                 else if (attrPathS[0] == "legacyPackages" && attrPath.size() > 2) {
