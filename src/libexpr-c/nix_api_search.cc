@@ -6,7 +6,6 @@
 #include "nix/store/names.hh"
 
 #include <algorithm>
-#include <cstdio>
 #include <functional>
 #include <regex>
 #include <string>
@@ -61,37 +60,24 @@ nix_err nix_search(
     nix_search_callback callback,
     void * user_data)
 {
-    fprintf(stderr, "DEBUG C++: nix_search called, cursor=%p\n", (void*)cursor);
     if (context) nix_clear_err(context);
     try {
-        fprintf(stderr, "DEBUG C++: accessing cursor->cache, cache=%p\n", (void*)cursor->cache);
         auto & state = cursor->cache->state;
-        fprintf(stderr, "DEBUG C++: got state reference\n");
 
         // Use empty params if none provided
         nix_search_params defaultParams;
         nix_search_params * p = params ? params : &defaultParams;
-        fprintf(stderr, "DEBUG C++: params setup done\n");
 
         // Track whether to continue searching
         bool continueSearch = true;
 
         // Recursive visit function (mirrors search.cc logic)
         std::function<void(nix::eval_cache::AttrCursor &, const std::vector<nix::Symbol> &, bool)> visit;
-        fprintf(stderr, "DEBUG C++: about to define visit lambda\n");
 
         visit = [&](nix::eval_cache::AttrCursor & cur, const std::vector<nix::Symbol> & attrPath, bool initialRecurse) {
-            fprintf(stderr, "DEBUG C++: visit called, attrPath.size()=%zu, initialRecurse=%d\n", attrPath.size(), initialRecurse);
             if (!continueSearch) return;
 
-            fprintf(stderr, "DEBUG C++: resolving attrPath\n");
             auto attrPathS = state.symbols.resolve(attrPath);
-            std::string pathStr;
-            for (size_t i = 0; i < attrPathS.size(); i++) {
-                if (i > 0) pathStr += ".";
-                pathStr += attrPathS[i];
-            }
-            fprintf(stderr, "DEBUG C++: attrPath resolved to '%s', checking isDerivation\n", pathStr.c_str());
 
             try {
                 auto recurse = [&]() {
@@ -104,31 +90,26 @@ nix_err nix_search(
                     }
                 };
 
+                // Check isDerivation with exception handling for broken packages
                 bool isDrv = false;
                 try {
                     isDrv = cur.isDerivation();
-                } catch (std::exception & e) {
-                    fprintf(stderr, "DEBUG C++: isDerivation threw: %s\n", e.what());
-                    return;
+                } catch (std::exception &) {
+                    return;  // Skip packages that throw when checking type
                 }
-                fprintf(stderr, "DEBUG C++: isDerivation=%d\n", isDrv);
+
                 if (isDrv) {
                     // Get package name attribute
-                    fprintf(stderr, "DEBUG C++: is derivation, getting name\n");
                     auto nameAttr = cur.maybeGetAttr(state.s.name);
-                    if (!nameAttr) {
-                        fprintf(stderr, "DEBUG C++: no name attr, returning\n");
-                        return;
-                    }
-                    fprintf(stderr, "DEBUG C++: got name attr, getting string\n");
+                    if (!nameAttr) return;
+
+                    // Get name string with exception handling for broken packages
                     std::string nameStr;
                     try {
                         nameStr = nameAttr->getString();
-                    } catch (std::exception & e) {
-                        fprintf(stderr, "DEBUG C++: getString threw: %s\n", e.what());
-                        return;
+                    } catch (std::exception &) {
+                        return;  // Skip packages that throw when getting name
                     }
-                    fprintf(stderr, "DEBUG C++: name string = %s\n", nameStr.c_str());
                     nix::DrvName drvName(nameStr);
 
                     // Get description from meta.description
@@ -137,9 +118,13 @@ nix_err nix_search(
                     if (metaAttr) {
                         auto descAttr = metaAttr->maybeGetAttr(state.s.description);
                         if (descAttr) {
-                            description = descAttr->getString();
-                            // Normalize description (replace newlines with spaces)
-                            std::replace(description.begin(), description.end(), '\n', ' ');
+                            try {
+                                description = descAttr->getString();
+                                // Normalize description (replace newlines with spaces)
+                                std::replace(description.begin(), description.end(), '\n', ' ');
+                            } catch (std::exception &) {
+                                // Skip description if it throws
+                            }
                         }
                     }
 
@@ -173,7 +158,6 @@ nix_err nix_search(
                     }
 
                     if (found) {
-                        fprintf(stderr, "DEBUG C++: found match, calling callback for %s\n", attrPathStr.c_str());
                         nix_search_result result;
                         result.attr_path = attrPathStr.c_str();
                         result.name = drvName.name.c_str();
@@ -181,26 +165,19 @@ nix_err nix_search(
                         result.description = description.c_str();
 
                         continueSearch = callback(&result, user_data);
-                        fprintf(stderr, "DEBUG C++: callback returned %d\n", continueSearch);
-                    } else {
-                        fprintf(stderr, "DEBUG C++: derivation %s did not match patterns\n", attrPathStr.c_str());
                     }
                 }
                 else if (attrPath.size() == 0) {
                     // Root level - always recurse
-                    fprintf(stderr, "DEBUG C++: root level, recursing\n");
                     recurse();
-                    fprintf(stderr, "DEBUG C++: root level recurse done\n");
                 }
                 else if ((attrPathS[0] == "legacyPackages" && attrPath.size() <= 2) ||
                          (attrPathS[0] == "packages" && attrPath.size() <= 2)) {
                     // First two levels of packages/legacyPackages - always recurse
-                    fprintf(stderr, "DEBUG C++: packages level, recursing\n");
                     recurse();
                 }
                 else if (initialRecurse) {
                     // Initial recurse flag set - recurse once
-                    fprintf(stderr, "DEBUG C++: initial recurse\n");
                     recurse();
                 }
                 else if (attrPathS[0] == "legacyPackages" && attrPath.size() > 2) {
@@ -220,11 +197,8 @@ nix_err nix_search(
         };
 
         // Start the search from the cursor
-        fprintf(stderr, "DEBUG C++: about to call visit, cursor->cursor=%p\n", (void*)cursor->cursor.get());
         auto initialPath = cursor->cursor->getAttrPath();
-        fprintf(stderr, "DEBUG C++: got initial path, size=%zu\n", initialPath.size());
         visit(*cursor->cursor, initialPath, true);
-        fprintf(stderr, "DEBUG C++: visit returned\n");
 
         return NIX_OK;
     } NIXC_CATCH_ERRS
