@@ -84,7 +84,7 @@ nix_err nix_search(
                 continueSearch = callback(&result, user_data);
                 return continueSearch;
             },
-            1 // recurseDepth - default for generic expressions
+            1 // recurseDepth - limit depth to reduce memory usage
         );
 
         return NIX_OK;
