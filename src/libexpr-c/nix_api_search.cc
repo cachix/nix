@@ -86,7 +86,12 @@ nix_err nix_search(
 
             fprintf(stderr, "DEBUG C++: resolving attrPath\n");
             auto attrPathS = state.symbols.resolve(attrPath);
-            fprintf(stderr, "DEBUG C++: attrPath resolved, checking isDerivation\n");
+            std::string pathStr;
+            for (size_t i = 0; i < attrPathS.size(); i++) {
+                if (i > 0) pathStr += ".";
+                pathStr += attrPathS[i];
+            }
+            fprintf(stderr, "DEBUG C++: attrPath resolved to '%s', checking isDerivation\n", pathStr.c_str());
 
             try {
                 auto recurse = [&]() {
@@ -99,7 +104,13 @@ nix_err nix_search(
                     }
                 };
 
-                bool isDrv = cur.isDerivation();
+                bool isDrv = false;
+                try {
+                    isDrv = cur.isDerivation();
+                } catch (std::exception & e) {
+                    fprintf(stderr, "DEBUG C++: isDerivation threw: %s\n", e.what());
+                    return;
+                }
                 fprintf(stderr, "DEBUG C++: isDerivation=%d\n", isDrv);
                 if (isDrv) {
                     // Get package name attribute
