@@ -71,14 +71,17 @@ nix_err nix_search(
         // Use empty params if none provided
         nix_search_params defaultParams;
         nix_search_params * p = params ? params : &defaultParams;
+        fprintf(stderr, "DEBUG C++: params setup done\n");
 
         // Track whether to continue searching
         bool continueSearch = true;
 
         // Recursive visit function (mirrors search.cc logic)
         std::function<void(nix::eval_cache::AttrCursor &, const std::vector<nix::Symbol> &, bool)> visit;
+        fprintf(stderr, "DEBUG C++: about to define visit lambda\n");
 
         visit = [&](nix::eval_cache::AttrCursor & cur, const std::vector<nix::Symbol> & attrPath, bool initialRecurse) {
+            fprintf(stderr, "DEBUG C++: visit called, attrPath.size()=%zu, initialRecurse=%d\n", attrPath.size(), initialRecurse);
             if (!continueSearch) return;
 
             auto attrPathS = state.symbols.resolve(attrPath);
@@ -182,7 +185,11 @@ nix_err nix_search(
         };
 
         // Start the search from the cursor
-        visit(*cursor->cursor, cursor->cursor->getAttrPath(), true);
+        fprintf(stderr, "DEBUG C++: about to call visit, cursor->cursor=%p\n", (void*)cursor->cursor.get());
+        auto initialPath = cursor->cursor->getAttrPath();
+        fprintf(stderr, "DEBUG C++: got initial path, size=%zu\n", initialPath.size());
+        visit(*cursor->cursor, initialPath, true);
+        fprintf(stderr, "DEBUG C++: visit returned\n");
 
         return NIX_OK;
     } NIXC_CATCH_ERRS
