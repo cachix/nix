@@ -105,9 +105,14 @@ nix_err nix_search(
                     // Get package name attribute
                     fprintf(stderr, "DEBUG C++: is derivation, getting name\n");
                     auto nameAttr = cur.maybeGetAttr(state.s.name);
-                    if (!nameAttr) return;
-
-                    nix::DrvName drvName(nameAttr->getString());
+                    if (!nameAttr) {
+                        fprintf(stderr, "DEBUG C++: no name attr, returning\n");
+                        return;
+                    }
+                    fprintf(stderr, "DEBUG C++: got name attr, getting string\n");
+                    auto nameStr = nameAttr->getString();
+                    fprintf(stderr, "DEBUG C++: name string = %s\n", nameStr.c_str());
+                    nix::DrvName drvName(nameStr);
 
                     // Get description from meta.description
                     std::string description;
@@ -151,6 +156,7 @@ nix_err nix_search(
                     }
 
                     if (found) {
+                        fprintf(stderr, "DEBUG C++: found match, calling callback for %s\n", attrPathStr.c_str());
                         nix_search_result result;
                         result.attr_path = attrPathStr.c_str();
                         result.name = drvName.name.c_str();
@@ -158,6 +164,9 @@ nix_err nix_search(
                         result.description = description.c_str();
 
                         continueSearch = callback(&result, user_data);
+                        fprintf(stderr, "DEBUG C++: callback returned %d\n", continueSearch);
+                    } else {
+                        fprintf(stderr, "DEBUG C++: derivation %s did not match patterns\n", attrPathStr.c_str());
                     }
                 }
                 else if (attrPath.size() == 0) {
