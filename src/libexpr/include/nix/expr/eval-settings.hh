@@ -168,6 +168,17 @@ struct EvalSettings : Config
             - [`builtins.storePath`](@docroot@/language/builtins.md#builtins-storePath)
         )"};
 
+    Setting<bool> pureEvalAllowLocalPaths{
+        this,
+        false,
+        "pure-eval-allow-local-paths",
+        R"(
+          When enabled alongside [`pure-eval`](#conf-pure-eval), allows access to local filesystem paths.
+          Pure evaluation restrictions on impure builtins and locked inputs still apply.
+          This is useful for evaluating local Nix expressions in a controlled environment
+          while maintaining deterministic evaluation semantics.
+        )"};
+
     Setting<bool> traceImportFromDerivation{
         this,
         false,

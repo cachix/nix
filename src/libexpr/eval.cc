@@ -237,7 +237,8 @@ EvalState::EvalState(
       }))
     , rootFS([&] {
         /* In pure eval mode, we provide a filesystem that only
-           contains the Nix store.
+           contains the Nix store, unless pureEvalAllowLocalPaths
+           is enabled.
 
            Otherwise, use a union accessor to make the augmented store
            available at its logical location while still having the
@@ -245,11 +246,12 @@ EvalState::EvalState(
            instance if we're evaluating a file from the physical
            /nix/store while using a chroot store, and also for lazy
            mounted fetchTree. */
-        auto accessor = settings.pureEval ? storeFS.cast<SourceAccessor>()
-                                          : makeUnionSourceAccessor({getFSSourceAccessor(), storeFS});
+        auto accessor = (settings.pureEval && !settings.pureEvalAllowLocalPaths)
+            ? storeFS.cast<SourceAccessor>()
+            : makeUnionSourceAccessor({getFSSourceAccessor(), storeFS});
 
         /* Apply access control if needed. */
-        if (settings.restrictEval || settings.pureEval)
+        if (settings.restrictEval || (settings.pureEval && !settings.pureEvalAllowLocalPaths))
             accessor = AllowListSourceAccessor::create(
                 accessor, {}, {}, [&settings](const CanonPath & path) -> RestrictedPathError {
                     auto modeInformation = settings.pureEval ? "in pure evaluation mode (use '--impure' to override)"
