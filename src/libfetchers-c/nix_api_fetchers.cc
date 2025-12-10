@@ -2,12 +2,19 @@
 #include "nix_api_fetchers_internal.hh"
 #include "nix_api_util_internal.h"
 
+#include "nix/store/globals.hh"
+
 extern "C" {
 
 nix_fetchers_settings * nix_fetchers_settings_new(nix_c_context * context)
 {
     try {
-        auto fetchersSettings = nix::make_ref<nix::fetchers::Settings>(nix::fetchers::Settings{});
+        auto fetchersSettings = nix::make_ref<nix::fetchers::Settings>();
+
+        // Pre-populate settings from nix.conf files.
+        // Requires nix_libstore_init() to have been called first.
+        nix::loadConfFile(*fetchersSettings);
+
         return new nix_fetchers_settings{
             .settings = fetchersSettings,
         };
