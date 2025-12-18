@@ -70,10 +70,12 @@ CallbackLogger::CallbackLogger(
     nix_activity_start_cb on_start,
     nix_activity_stop_cb on_stop,
     nix_activity_result_cb on_result,
+    nix_log_cb on_log,
     void * user_data)
     : on_start(on_start)
     , on_stop(on_stop)
     , on_result(on_result)
+    , on_log(on_log)
     , user_data(user_data)
 {
 }
@@ -86,13 +88,44 @@ void CallbackLogger::startActivity(
     const Fields & fields,
     ActivityId parent)
 {
-    if (on_start) {
-        try {
-            const char * type_str = activityTypeToString(type);
-            on_start(act, s.c_str(), type_str, user_data);
-        } catch (...) {
-            // Silently ignore callback errors to avoid crashing Nix
+    if (!on_start)
+        return;
+
+    try {
+        const char * type_str = activityTypeToString(type);
+        size_t field_count = fields.size();
+
+        // Build arrays of field data (same pattern as result())
+        std::vector<int> field_types;
+        std::vector<int64_t> int_values;
+        std::vector<std::string> string_storage;
+        std::vector<const char *> string_values;
+
+        for (const auto & field : fields) {
+            if (field.type == Logger::Field::tInt) {
+                field_types.push_back(0);
+                int_values.push_back(field.i);
+                string_values.push_back(nullptr);
+            } else if (field.type == Logger::Field::tString) {
+                field_types.push_back(1);
+                int_values.push_back(0);
+                string_storage.push_back(field.s);
+                string_values.push_back(string_storage.back().c_str());
+            }
         }
+
+        on_start(
+            act,
+            s.c_str(),
+            type_str,
+            field_count,
+            field_types.data(),
+            int_values.data(),
+            string_values.data(),
+            parent,
+            user_data);
+    } catch (...) {
+        // Silently ignore callback errors to avoid crashing Nix
     }
 }
 
@@ -158,6 +191,7 @@ nix_err nix_set_logger_callbacks(
     nix_activity_start_cb on_start,
     nix_activity_stop_cb on_stop,
     nix_activity_result_cb on_result,
+    nix_log_cb on_log,
     void * user_data)
 {
     if (context)
@@ -165,7 +199,7 @@ nix_err nix_set_logger_callbacks(
     try {
         // Create the callback logger
         auto callback_logger = std::make_unique<nix::CallbackLogger>(
-            on_start, on_stop, on_result, user_data);
+            on_start, on_stop, on_result, on_log, user_data);
 
         // Replace the global logger
         nix::logger = std::move(callback_logger);
