@@ -30,12 +30,28 @@ extern "C" {
  * @param[in] description Human-readable description of the activity (e.g., "building /nix/store/...")
  * @param[in] activity_type String representation of activity type:
  *                            "realise", "build", "substitute", "copy-paths", etc.
+ * @param[in] field_count Number of fields associated with this activity
+ * @param[in] field_types Array of field types: 0 = int64, 1 = string
+ * @param[in] int_values Array of int64 values (0 for string fields)
+ * @param[in] string_values Array of C string pointers (NULL for non-string fields)
+ * @param[in] parent Parent activity identifier (0 if no parent)
  * @param[in] user_data Arbitrary user data passed to nix_set_logger_callbacks
+ *
+ * @note The fields provide structured data about the activity. For example:
+ *       - "build": fields[0] = derivation path (string)
+ *       - "substitute": fields[0] = store path (string), fields[1] = substituter URL (string)
+ *       - "query-path-info": fields[0] = store path (string), fields[1] = substituter URL (string)
+ *       - "copy-path": fields[0] = store path (string), fields[1] = source/dest (string)
  */
 typedef void (*nix_activity_start_cb)(
     uint64_t id,
     const char * description,
     const char * activity_type,
+    size_t field_count,
+    const int * field_types,
+    const int64_t * int_values,
+    const char * const * string_values,
+    uint64_t parent,
     void * user_data);
 
 /**
@@ -77,6 +93,18 @@ typedef void (*nix_activity_result_cb)(
     void * user_data);
 
 /**
+ * @brief Called when Nix emits a log message.
+ *
+ * This captures general log messages from Nix, including "evaluating file '...'"
+ * messages during evaluation.
+ *
+ * @param[in] level Verbosity level (0=Error, 1=Warn, 2=Notice, 3=Info, 4=Talkative, 5=Chatty, 6=Debug, 7=Vomit)
+ * @param[in] msg The log message
+ * @param[in] user_data Arbitrary user data passed to nix_set_logger_callbacks
+ */
+typedef void (*nix_log_cb)(int level, const char * msg, void * user_data);
+
+/**
  * @brief Register callbacks to observe Nix activities.
  *
  * This function must be called before any Nix operations that generate activities
@@ -100,8 +128,15 @@ typedef void (*nix_activity_result_cb)(
  *
  * Example:
  * @code{.c}
- * void on_start(uint64_t id, const char* desc, const char* type, void* data) {
- *     printf("[%s] %s\n", type, desc);
+ * void on_start(uint64_t id, const char* desc, const char* type,
+ *               size_t field_count, const int* field_types,
+ *               const int64_t* int_values, const char* const* string_values,
+ *               uint64_t parent, void* data) {
+ *     printf("[%s] %s (parent=%lu)\n", type, desc, parent);
+ *     // Access structured fields for activity-specific data
+ *     if (field_count > 0 && field_types[0] == 1) {
+ *         printf("  path: %s\n", string_values[0]);
+ *     }
  * }
  *
  * void on_result(uint64_t id, const char* result_type, size_t field_count,
@@ -116,7 +151,7 @@ typedef void (*nix_activity_result_cb)(
  * }
  *
  * nix_c_context* ctx = nix_c_context_create();
- * nix_set_logger_callbacks(ctx, on_start, NULL, on_result, NULL);
+ * nix_set_logger_callbacks(ctx, on_start, NULL, on_result, on_log, NULL);
  * @endcode
  */
 nix_err nix_set_logger_callbacks(
@@ -124,6 +159,7 @@ nix_err nix_set_logger_callbacks(
     nix_activity_start_cb on_start,
     nix_activity_stop_cb on_stop,
     nix_activity_result_cb on_result,
+    nix_log_cb on_log,
     void * user_data);
 
 // cffi end
