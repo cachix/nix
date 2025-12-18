@@ -26,6 +26,7 @@ private:
     nix_activity_start_cb on_start;
     nix_activity_stop_cb on_stop;
     nix_activity_result_cb on_result;
+    nix_log_cb on_log;
     void * user_data;
 
     /**
@@ -46,6 +47,7 @@ public:
         nix_activity_start_cb on_start = nullptr,
         nix_activity_stop_cb on_stop = nullptr,
         nix_activity_result_cb on_result = nullptr,
+        nix_log_cb on_log = nullptr,
         void * user_data = nullptr);
 
     ~CallbackLogger() override = default;
@@ -64,7 +66,14 @@ public:
 
     void log(Verbosity lvl, std::string_view s) override
     {
-        // No-op: we only care about activities
+        if (on_log) {
+            try {
+                std::string msg(s);
+                on_log(static_cast<int>(lvl), msg.c_str(), user_data);
+            } catch (...) {
+                // Silently ignore callback errors
+            }
+        }
     }
 
     void logEI(const ErrorInfo & ei) override
