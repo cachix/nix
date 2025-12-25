@@ -14,6 +14,7 @@ struct nix_flake_settings
 struct nix_flake_reference_parse_flags
 {
     std::optional<nix::Path> baseDirectory;
+    bool preserveRelativePaths = false;
 };
 
 struct nix_flake_reference
