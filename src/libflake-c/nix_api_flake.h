@@ -146,6 +146,23 @@ nix_err nix_flake_reference_parse_flags_set_base_directory(
     size_t baseDirectoryLen);
 
 /**
+ * @brief Enable preserving relative paths in flake references
+ *
+ * When enabled, relative paths like `./` or `../` are preserved as-is
+ * in the parsed flake reference instead of being resolved to absolute paths.
+ * This allows the locking mechanism to resolve them later using the source path context.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] flags The flags to modify
+ * @param[in] preserve Whether to preserve relative paths (true) or require absolute paths (false)
+ * @return NIX_OK on success, NIX_ERR on failure
+ */
+nix_err nix_flake_reference_parse_flags_set_preserve_relative_paths(
+    nix_c_context * context,
+    nix_flake_reference_parse_flags * flags,
+    bool preserve);
+
+/**
  * @brief A new `nix_flake_lock_flags` with defaults
  * @param[in] settings Flake settings that may affect the defaults
  */
