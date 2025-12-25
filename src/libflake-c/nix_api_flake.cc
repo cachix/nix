@@ -69,6 +69,19 @@ nix_err nix_flake_reference_parse_flags_set_base_directory(
     NIXC_CATCH_ERRS
 }
 
+nix_err nix_flake_reference_parse_flags_set_preserve_relative_paths(
+    nix_c_context * context,
+    nix_flake_reference_parse_flags * flags,
+    bool preserve)
+{
+    nix_clear_err(context);
+    try {
+        flags->preserveRelativePaths = preserve;
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
 nix_err nix_flake_reference_and_fragment_from_string(
     nix_c_context * context,
     [[maybe_unused]] nix_fetchers_settings * fetchSettings,
@@ -85,7 +98,12 @@ nix_err nix_flake_reference_and_fragment_from_string(
     try {
         std::string str(strData, strSize);
 
-        auto [flakeRef, fragment] = nix::parseFlakeRefWithFragment(str, parseFlags->baseDirectory, true);
+        auto [flakeRef, fragment] = nix::parseFlakeRefWithFragment(
+            str,
+            parseFlags->baseDirectory,
+            true, // allowMissing
+            true, // isFlake
+            parseFlags->preserveRelativePaths);
         *flakeReferenceOut = new nix_flake_reference{nix::make_ref<nix::FlakeRef>(flakeRef)};
         return call_nix_get_string_callback(fragment, fragmentCallback, fragmentCallbackUserData);
     }
