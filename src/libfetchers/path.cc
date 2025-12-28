@@ -110,12 +110,15 @@ struct PathInputScheme : InputScheme
     {
         auto path = getStrAttr(input.attrs, "path");
 
+        // Resolve symlinks to ensure consistent paths across platforms.
+        // This is critical on macOS where /var -> /private/var symlink
+        // can cause NAR hash mismatches if paths are canonicalized inconsistently.
         if (isAbsolute(path))
-            return canonPath(path);
+            return canonPath(path, true);
 
         // Try to resolve relative path using base directory if available
         if (!input.settings->baseDirectory.get().empty()) {
-            return canonPath(input.settings->baseDirectory.get() + "/" + path);
+            return canonPath(input.settings->baseDirectory.get() + "/" + path, true);
         }
 
         throw Error("cannot fetch input '%s' because it uses a relative path", input.to_string());
