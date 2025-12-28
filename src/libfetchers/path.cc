@@ -145,8 +145,11 @@ struct PathInputScheme : InputScheme
     {
         std::filesystem::path path = getStrAttr(input.attrs, "path");
 
+        // Resolve symlinks to ensure consistent paths across platforms.
+        // This is critical on macOS where /var -> /private/var symlink
+        // can cause NAR hash mismatches if paths are canonicalized inconsistently.
         if (path.is_absolute())
-            return canonPath(path);
+            return canonPath(path, true);
 
         // Try to resolve relative path using base directory if available
         if (!settings.baseDirectory.get().empty()) {
