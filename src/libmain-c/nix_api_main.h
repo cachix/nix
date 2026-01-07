@@ -38,6 +38,16 @@ nix_err nix_init_plugins(nix_c_context * context);
  */
 nix_err nix_set_log_format(nix_c_context * context, const char * format);
 
+/**
+ * @brief Trigger an interrupt
+ *
+ * Sets the interrupt flag and runs all registered interrupt callbacks.
+ * This can be used to programmatically interrupt long-running Nix operations.
+ *
+ * @note On Windows, this only sets the interrupt flag; callbacks are not supported.
+ */
+void nix_trigger_interrupt(void);
+
 // cffi end
 #ifdef __cplusplus
 }
