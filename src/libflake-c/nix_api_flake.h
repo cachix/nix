@@ -492,6 +492,33 @@ nix_err nix_lock_file_diff(
     void * user_data);
 
 /**
+ * @brief Check if the lock file contains any unlocked inputs
+ *
+ * Returns the flake reference of the first unlocked input found, or an empty
+ * string if all inputs are properly locked. An input is considered "locked"
+ * based on its type:
+ * - git/mercurial: has a revision
+ * - github/gitlab/sourcehut: has a revision and narHash
+ * - path/tarball/file: has a narHash
+ *
+ * If `allow-dirty-locks` is enabled in fetchSettings, inputs with a narHash
+ * are also considered locked even without a revision.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] fetchSettings Fetcher settings (for allow-dirty-locks)
+ * @param[in] lockFile The lock file to check
+ * @param[in] callback Called with the unlocked input's flake ref (empty string if all locked)
+ * @param[in] user_data Optional, arbitrary data passed to callback
+ * @return NIX_OK on success, NIX_ERR on failure
+ */
+nix_err nix_lock_file_get_unlocked_input(
+    nix_c_context * context,
+    nix_fetchers_settings * fetchSettings,
+    nix_lock_file * lockFile,
+    nix_get_string_callback callback,
+    void * user_data);
+
+/**
  * @brief Create a new iterator over all inputs in a lock file
  * @param[out] context Optional, stores error information
  * @param[in] lockFile The lock file to iterate over
