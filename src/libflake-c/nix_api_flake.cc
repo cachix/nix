@@ -533,6 +533,31 @@ nix_err nix_lock_file_inputs_iterator_get_original_ref(
     NIXC_CATCH_ERRS
 }
 
+nix_err nix_lock_file_inputs_iterator_is_locked(
+    nix_c_context * context,
+    nix_fetchers_settings * fetchSettings,
+    nix_lock_file_inputs_iterator * iter,
+    bool * result)
+{
+    nix_clear_err(context);
+    if (!iter->valid) {
+        return nix_set_err_msg(context, NIX_ERR_UNKNOWN, "Iterator is not valid");
+    }
+    try {
+        const auto & edge = iter->current->second;
+
+        if (auto lockedNode = std::get_if<nix::ref<nix::flake::LockedNode>>(&edge)) {
+            *result = (*lockedNode)->lockedRef.input.isLocked(*fetchSettings->settings);
+        } else {
+            // It's an InputAttrPath (follows input), considered locked
+            // since it inherits locking from its target
+            *result = true;
+        }
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
 void nix_lock_file_inputs_iterator_free(nix_lock_file_inputs_iterator * iter)
 {
     delete iter;

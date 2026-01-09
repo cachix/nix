@@ -583,6 +583,31 @@ nix_err nix_lock_file_inputs_iterator_get_original_ref(
     void * user_data);
 
 /**
+ * @brief Check if the current input is locked
+ *
+ * An input is considered "locked" based on its type:
+ * - git/mercurial: has a revision
+ * - github/gitlab/sourcehut: has a revision and narHash
+ * - path/tarball/file: has a narHash
+ *
+ * Note: This does not consider the `allow-dirty-locks` setting.
+ * For that behavior, use nix_lock_file_get_unlocked_input instead.
+ *
+ * For "follows" inputs (InputAttrPath), this returns true since they
+ * inherit locking from their target.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] iter The iterator pointing to the input to check
+ * @param[out] result Set to true if the input is locked, false otherwise
+ * @return NIX_OK on success, NIX_ERR on failure
+ */
+nix_err nix_lock_file_inputs_iterator_is_locked(
+    nix_c_context * context,
+    nix_fetchers_settings * fetchSettings,
+    nix_lock_file_inputs_iterator * iter,
+    bool * result);
+
+/**
  * @brief Free an iterator
  * Does not fail.
  * @param[in] iter The iterator to free
