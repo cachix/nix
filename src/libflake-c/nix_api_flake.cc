@@ -412,6 +412,25 @@ nix_err nix_lock_file_diff(
     NIXC_CATCH_ERRS
 }
 
+nix_err nix_lock_file_get_unlocked_input(
+    nix_c_context * context,
+    nix_fetchers_settings * fetchSettings,
+    nix_lock_file * lockFile,
+    nix_get_string_callback callback,
+    void * user_data)
+{
+    nix_clear_err(context);
+    try {
+        auto unlockedInput = lockFile->lockFile.isUnlocked(*fetchSettings->settings);
+        if (unlockedInput) {
+            return call_nix_get_string_callback(unlockedInput->to_string(), callback, user_data);
+        } else {
+            return call_nix_get_string_callback("", callback, user_data);
+        }
+    }
+    NIXC_CATCH_ERRS
+}
+
 nix_lock_file_inputs_iterator * nix_lock_file_inputs_iterator_new(
     nix_c_context * context,
     nix_lock_file * lockFile)
