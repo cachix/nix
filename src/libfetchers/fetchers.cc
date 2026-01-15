@@ -167,6 +167,11 @@ std::optional<std::filesystem::path> Input::isRelative() const
     return scheme->isRelative(*this);
 }
 
+bool Input::isLocal() const
+{
+    return scheme && scheme->isLocal(*this);
+}
+
 Attrs Input::toAttrs() const
 {
     return attrs;
@@ -223,6 +228,11 @@ std::pair<StorePath, Input> Input::fetchToStore(const Settings & settings, Store
 
 void Input::checkLocks(Input specified, Input & result)
 {
+    /* Local inputs (path: and git+file://) refresh transparently.
+       Skip validation to allow content changes without errors. */
+    if (specified.isLocal())
+        return;
+
     /* If the original input is final, then we just return the
        original attributes, dropping any new fields returned by the
        fetcher. However, any fields that are in both the specified and
