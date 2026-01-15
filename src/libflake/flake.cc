@@ -568,7 +568,8 @@ static void computeLocksImpl(
                         oldLock = *oldLock3;
 
             if (oldLock && oldLock->originalRef.canonicalize() == input.ref->canonicalize()
-                && oldLock->parentInputAttrPath == overriddenParentPath && !hasCliOverride) {
+                && oldLock->parentInputAttrPath == overriddenParentPath && !hasCliOverride
+                && !oldLock->lockedRef.input.isLocal()) {
                 debug("keeping existing input '%s'", inputAttrPathS);
 
                 /* Copy the input from the old lock since its flakeref
@@ -651,7 +652,8 @@ static void computeLocksImpl(
                    this input. */
                 debug("creating new input '%s'", inputAttrPathS);
 
-                if (!ctx.lockFlags.allowUnlocked && !input.ref->input.isLocked(ctx.state.fetchSettings) && !input.ref->input.isRelative())
+                if (!ctx.lockFlags.allowUnlocked && !input.ref->input.isLocked(ctx.state.fetchSettings)
+                    && !input.ref->input.isRelative() && !(oldLock && input.ref->input.isLocal()))
                     throw Error("cannot update unlocked flake input '%s' in pure mode", inputAttrPathS);
 
                 /* Note: in case of an --override-input, we use

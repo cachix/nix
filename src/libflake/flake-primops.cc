@@ -58,7 +58,7 @@ PrimOp getFlake(const Settings & settings)
                relied on being able to do builtins.getFlake on a flakeref with discarded string context.
                So if a flake input has a physical source path that is inside the store, first try to look it up in the
                storeFS. */
-            if (auto sourcePath = flakeRef.input.getSourcePath();
+            if (auto sourcePath = flakeRef.input.getSourcePath(state.fetchSettings);
                 flakeRef.input.getType() == "path" && sourcePath && state.store->isInStore(sourcePath->string())) {
                 auto [storePath, subPath] = state.store->toStorePath(sourcePath->string());
                 if (auto mount = state.storeFS->getMount(CanonPath(state.store->printStorePath(storePath)))) {

@@ -1124,7 +1124,7 @@ struct CmdFlakeArchive : FlakeCommand, MixJSON, MixDryRun, MixNoCheckSigs
         sources.insert(storePath);
 
         // FIXME: use graph output, handle cycles.
-        auto traverse = [&store, json = json, &sources, &getStorePath](
+        auto traverse = [&store, json = json, dryRun = dryRun, &sources, &getStorePath](
                             this const auto & self, const flake::Node & node) -> nlohmann::json {
             nlohmann::json jsonObj2 = json ? nlohmann::json::object() : nlohmann::json(nullptr);
             for (auto & [inputName, input] : node.inputs) {
@@ -1132,8 +1132,16 @@ struct CmdFlakeArchive : FlakeCommand, MixJSON, MixDryRun, MixNoCheckSigs
                     std::optional<StorePath> storePath;
                     const auto & lockedRef = (*inputNode)->lockedRef;
                     if (!lockedRef.input.isRelative()) {
-                        storePath = getStorePath(lockedRef);
-                        sources.insert(*storePath);
+                        /* Local inputs without narHash must be fetched to determine store path.
+                           In dry-run mode, skip them since computeStorePath requires narHash. */
+                        if (lockedRef.input.isLocal() && !lockedRef.input.getNarHash()) {
+                            if (!dryRun)
+                                storePath = getStorePath(lockedRef);
+                        } else {
+                            storePath = getStorePath(lockedRef);
+                        }
+                        if (storePath)
+                            sources.insert(*storePath);
                     }
                     if (json) {
                         auto & jsonObj3 = jsonObj2[inputName];
