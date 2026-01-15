@@ -106,6 +106,11 @@ struct PathInputScheme : InputScheme
         return (bool) input.getNarHash();
     }
 
+    bool isLocal(const Input & input) const override
+    {
+        return true;
+    }
+
     std::filesystem::path getAbsPath(const Input & input) const
     {
         auto path = getStrAttr(input.attrs, "path");

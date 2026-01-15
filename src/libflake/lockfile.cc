@@ -40,7 +40,7 @@ LockedNode::LockedNode(const fetchers::Settings & fetchSettings, const nlohmann:
     , parentInputAttrPath(
           json.find("parent") != json.end() ? (std::optional<InputAttrPath>) json["parent"] : std::nullopt)
 {
-    if (!lockedRef.input.isLocked() && !lockedRef.input.isRelative()) {
+    if (!lockedRef.input.isLocked() && !lockedRef.input.isRelative() && !lockedRef.input.isLocal()) {
         if (lockedRef.input.getNarHash())
             warn(
                 "Lock file entry '%s' is unlocked (e.g. lacks a Git revision) but does have a NAR hash. "
@@ -205,8 +205,19 @@ std::pair<nlohmann::json, LockFile::KeyMap> LockFile::toJSON() const
             /* For backward compatibility, omit the "__final"
                attribute. We never allow non-final inputs in lock files
                anyway. */
-            assert(lockedNode->lockedRef.input.isFinal() || lockedNode->lockedRef.input.isRelative());
+            assert(lockedNode->lockedRef.input.isFinal() || lockedNode->lockedRef.input.isRelative()
+                   || lockedNode->lockedRef.input.isLocal());
             n["locked"].erase("__final");
+            /* Strip volatile attributes from local inputs to avoid
+               lock file churn. Local inputs are always fetched fresh. */
+            if (lockedNode->lockedRef.input.isLocal()) {
+                n["locked"].erase("narHash");
+                n["locked"].erase("lastModified");
+                n["locked"].erase("rev");
+                n["locked"].erase("revCount");
+                n["locked"].erase("dirtyRev");
+                n["locked"].erase("dirtyShortRev");
+            }
             if (!lockedNode->isFlake)
                 n["flake"] = false;
             if (lockedNode->parentInputAttrPath)
@@ -267,7 +278,8 @@ std::optional<FlakeRef> LockFile::isUnlocked(const fetchers::Settings & fetchSet
             continue;
         auto node = i.dynamic_pointer_cast<const LockedNode>();
         if (node && (!isConsideredLocked(node->lockedRef.input) || !node->lockedRef.input.isFinal())
-            && !node->lockedRef.input.isRelative())
+            && !node->lockedRef.input.isRelative()
+            && !node->lockedRef.input.isLocal())
             return node->lockedRef;
     }
 
