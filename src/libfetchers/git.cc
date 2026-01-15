@@ -1128,6 +1128,18 @@ struct GitInputScheme : InputScheme
         auto rev = input.getRev();
         return rev && rev != nullRev;
     }
+
+    bool isLocal(const Input & input) const override
+    {
+        auto urlStr = maybeGetStrAttr(input.attrs, "url");
+        if (!urlStr)
+            return false;
+        try {
+            return parseURL(*urlStr).scheme == "file";
+        } catch (...) {
+            return false;
+        }
+    }
 };
 
 static auto rGitInputScheme = OnStartup([] { registerInputScheme(std::make_unique<GitInputScheme>()); });

@@ -1104,9 +1104,18 @@ struct CmdFlakeArchive : FlakeCommand, MixJSON, MixDryRun, MixNoCheckSigs
                 if (auto inputNode = std::get_if<0>(&input)) {
                     std::optional<StorePath> storePath;
                     if (!(*inputNode)->lockedRef.input.isRelative()) {
-                        storePath = dryRun ? (*inputNode)->lockedRef.input.computeStorePath(*store)
-                                           : (*inputNode)->lockedRef.input.fetchToStore(fetchSettings, *store).first;
-                        sources.insert(*storePath);
+                        /* Local inputs without narHash must be fetched to determine store path.
+                           In dry-run mode, skip them since computeStorePath requires narHash. */
+                        if ((*inputNode)->lockedRef.input.isLocal() && !(*inputNode)->lockedRef.input.getNarHash()) {
+                            if (!dryRun) {
+                                storePath = (*inputNode)->lockedRef.input.fetchToStore(fetchSettings, *store).first;
+                                sources.insert(*storePath);
+                            }
+                        } else {
+                            storePath = dryRun ? (*inputNode)->lockedRef.input.computeStorePath(*store)
+                                               : (*inputNode)->lockedRef.input.fetchToStore(fetchSettings, *store).first;
+                            sources.insert(*storePath);
+                        }
                     }
                     if (json) {
                         auto & jsonObj3 = jsonObj2[inputName];

@@ -89,6 +89,12 @@ public:
     std::optional<std::filesystem::path> isRelative() const;
 
     /**
+     * Return whether this is a local filesystem input (path: or git+file://).
+     * Local inputs are always fetched fresh and exempt from strict locking.
+     */
+    bool isLocal() const;
+
+    /**
      * Return whether this is a "final" input, meaning that fetching
      * it will not add, remove or change any attributes. (See
      * `checkLocks()` for the semantics.) Only "final" inputs can be
@@ -267,6 +273,15 @@ struct InputScheme
     virtual std::optional<std::filesystem::path> isRelative(const Input & input) const
     {
         return std::nullopt;
+    }
+
+    /**
+     * Return whether this input refers to a local filesystem path.
+     * Local inputs are exempt from strict locking and refresh transparently.
+     */
+    virtual bool isLocal(const Input & input) const
+    {
+        return false;
     }
 
     virtual std::optional<std::string>
