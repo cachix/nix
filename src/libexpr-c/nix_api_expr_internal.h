@@ -25,7 +25,9 @@ struct EvalState
 {
     nix::fetchers::Settings fetchSettings;
     nix::EvalSettings settings;
-    nix::EvalState state;
+    // Use shared_ptr to enable shared_from_this() for debugger support
+    std::shared_ptr<nix::EvalState> statePtr;
+    nix::EvalState & state;
 
     EvalState(
         nix::fetchers::Settings && fs,
@@ -34,7 +36,8 @@ struct EvalState
         nix::ref<nix::Store> st)
       : fetchSettings(std::move(fs)),
         settings(std::move(s)),
-        state(lp, st, fetchSettings, settings)
+        statePtr(std::make_shared<nix::EvalState>(lp, st, fetchSettings, settings)),
+        state(*statePtr)
     {
     }
 };

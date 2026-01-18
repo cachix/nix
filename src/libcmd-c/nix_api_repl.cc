@@ -84,12 +84,8 @@ nix_err nix_repl_run_simple(
             env = extra_env->map;
         }
 
-        // SAFETY: We create a ref from a shared_ptr initialized with a raw pointer that has
-        // a custom no-op deleter to prevent double-free. The C struct EvalState
-        // contains a stack-allocated nix::EvalState which must not be deleted by shared_ptr.
-        // The C caller is responsible for keeping the EvalState valid during the REPL execution.
-        auto shared_state = std::shared_ptr<nix::EvalState>(&state->state, [](nix::EvalState*) {});
-        nix::ReplExitStatus status = nix::AbstractNixRepl::runSimple(nix::ref<nix::EvalState>(shared_state), env);
+        // Use the shared_ptr stored in the EvalState struct
+        nix::ReplExitStatus status = nix::AbstractNixRepl::runSimple(nix::ref<nix::EvalState>(state->statePtr), env);
 
         if (exit_status != nullptr) {
             *exit_status = static_cast<nix_repl_exit_status>(status);
@@ -109,6 +105,9 @@ nix_err nix_evalstate_enable_debugger(nix_c_context * context, EvalState * state
     }
     try {
         state->state.debugRepl = &nix::AbstractNixRepl::runSimple;
+        // By default, ignore exceptions inside tryEval when debugger is enabled
+        // Otherwise the debugger breaks on expected/handled errors
+        state->settings.ignoreExceptionsDuringTry.assign(true);
         return NIX_OK;
     }
     NIXC_CATCH_ERRS
