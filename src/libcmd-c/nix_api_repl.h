@@ -94,7 +94,7 @@ void nix_valmap_free(nix_valmap * map);
  * @param[out] context Optional, stores error information
  * @param[in] map The ValMap to insert into
  * @param[in] key The variable name (null-terminated string)
- * @param[in] value The Nix value to associate with the key
+ * @param[in] value The Nix value pointer to associate with the key
  * @return NIX_OK on success, an error code otherwise
  */
 nix_err nix_valmap_insert(nix_c_context * context, nix_valmap * map, const char * key, nix_value * value);
@@ -124,17 +124,52 @@ nix_err nix_repl_run_simple(
 /**
  * @brief Enable the debugger for an evaluation state.
  *
- * When the debugger is enabled, any evaluation error will automatically enter
- * an interactive REPL where you can inspect the error context and variables.
- * This is equivalent to the `--debugger` CLI flag.
+ * When the debugger is enabled, any evaluation error will capture the debug
+ * context and return immediately. The caller should check nix_debugger_is_pending()
+ * after evaluation and call nix_debugger_run_pending() to run the REPL.
+ *
+ * This deferred approach allows the caller to perform cleanup (e.g., restoring
+ * terminal state from a TUI) before the interactive REPL takes over.
  *
  * @param[out] context Optional, stores error information
  * @param[in] state The evaluation state to enable the debugger for
  * @return NIX_OK on success, an error code otherwise
  *
- * @see nix_repl_run_simple
+ * @see nix_debugger_is_pending, nix_debugger_run_pending
  */
 nix_err nix_evalstate_enable_debugger(nix_c_context * context, EvalState * state);
+
+/**
+ * @brief Check if a debugger session is pending.
+ *
+ * After evaluation with the debugger enabled, this function returns true if
+ * an error occurred and the debug context was captured. The caller should
+ * then call nix_debugger_run_pending() to run the interactive REPL.
+ *
+ * @return true if a debugger session is pending, false otherwise
+ *
+ * @see nix_evalstate_enable_debugger, nix_debugger_run_pending
+ */
+bool nix_debugger_is_pending();
+
+/**
+ * @brief Run the pending debugger REPL.
+ *
+ * If a debugger session is pending (nix_debugger_is_pending() returns true),
+ * this function runs the interactive REPL with the captured debug context.
+ * After this call, the pending state is cleared.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] state The evaluation state (must be the same one used during evaluation)
+ * @param[out] exit_status The exit status from the REPL (if not NULL)
+ * @return NIX_OK on success, an error code otherwise
+ *
+ * @see nix_evalstate_enable_debugger, nix_debugger_is_pending
+ */
+nix_err nix_debugger_run_pending(
+    nix_c_context * context,
+    EvalState * state,
+    nix_repl_exit_status * exit_status);
 
 // cffi end
 #ifdef __cplusplus
