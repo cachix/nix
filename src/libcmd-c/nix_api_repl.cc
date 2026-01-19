@@ -1,5 +1,6 @@
 #include <cstring>
 #include <stdexcept>
+#include <optional>
 
 #include "nix/cmd/repl.hh"
 #include "nix/expr/eval.hh"
@@ -13,6 +14,24 @@
 #include "nix_api_store_internal.h"
 #include "nix_api_util.h"
 #include "nix_api_util_internal.h"
+
+// Captured debug state for deferred REPL execution
+// When debugger is enabled and an error occurs, we capture the environment
+// and return immediately, allowing the caller to run the REPL later.
+namespace {
+    std::optional<nix::ValMap> g_captured_debug_env;
+    bool g_debug_pending = false;
+
+    // Custom debugRepl that captures state and returns immediately
+    nix::ReplExitStatus debugReplCapture(
+        nix::ref<nix::EvalState> state,
+        nix::ValMap const& env)
+    {
+        g_captured_debug_env = env;
+        g_debug_pending = true;
+        return nix::ReplExitStatus::QuitAll;
+    }
+}
 
 extern "C" {
 
@@ -104,10 +123,45 @@ nix_err nix_evalstate_enable_debugger(nix_c_context * context, EvalState * state
         return NIX_OK;
     }
     try {
-        state->state.debugRepl = &nix::AbstractNixRepl::runSimple;
+        // Use capture callback - captures debug env and returns immediately
+        // Caller should check nix_debugger_is_pending() and call nix_debugger_run_pending()
+        state->state.debugRepl = &debugReplCapture;
         // By default, ignore exceptions inside tryEval when debugger is enabled
         // Otherwise the debugger breaks on expected/handled errors
         state->settings.ignoreExceptionsDuringTry.assign(true);
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+bool nix_debugger_is_pending()
+{
+    return g_debug_pending;
+}
+
+nix_err nix_debugger_run_pending(
+    nix_c_context * context,
+    EvalState * state,
+    nix_repl_exit_status * exit_status)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    if (!g_debug_pending || !g_captured_debug_env || state == nullptr) {
+        return NIX_OK;
+    }
+    try {
+        g_debug_pending = false;
+        auto env = std::move(*g_captured_debug_env);
+        g_captured_debug_env.reset();
+
+        nix::ReplExitStatus status = nix::AbstractNixRepl::runSimple(
+            nix::ref<nix::EvalState>(state->statePtr),
+            env);
+
+        if (exit_status != nullptr) {
+            *exit_status = static_cast<nix_repl_exit_status>(status);
+        }
+
         return NIX_OK;
     }
     NIXC_CATCH_ERRS
