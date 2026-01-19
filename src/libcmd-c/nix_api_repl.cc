@@ -27,8 +27,10 @@ namespace {
         nix::ref<nix::EvalState> state,
         nix::ValMap const& env)
     {
+        std::cerr << "[DEBUG C++] debugReplCapture called with " << env.size() << " env entries" << std::endl;
         g_captured_debug_env = env;
         g_debug_pending = true;
+        std::cerr << "[DEBUG C++] g_debug_pending set to true" << std::endl;
         return nix::ReplExitStatus::QuitAll;
     }
 }
@@ -123,9 +125,11 @@ nix_err nix_evalstate_enable_debugger(nix_c_context * context, EvalState * state
         return NIX_OK;
     }
     try {
+        std::cerr << "[DEBUG C++] nix_evalstate_enable_debugger called" << std::endl;
         // Use capture callback - captures debug env and returns immediately
         // Caller should check nix_debugger_is_pending() and call nix_debugger_run_pending()
         state->state.debugRepl = &debugReplCapture;
+        std::cerr << "[DEBUG C++] debugRepl set to debugReplCapture" << std::endl;
         // By default, ignore exceptions inside tryEval when debugger is enabled
         // Otherwise the debugger breaks on expected/handled errors
         state->settings.ignoreExceptionsDuringTry.assign(true);
