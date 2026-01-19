@@ -201,13 +201,16 @@ nix_build_env * nix_build_env_from_derivation(
  * @param[out] context Optional, stores error information
  * @param[in] store Nix store reference (used for building)
  * @param[in] drv_path The derivation store path
+ * @param[out] out_env_path Optional, receives the store path of the built environment.
+ *             Pass NULL to ignore. Caller must free with nix_store_path_free.
  * @return A new BuildEnvironment with fully-expanded variables, or NULL on error
- * @see nix_build_env_free, nix_build_env_from_derivation
+ * @see nix_build_env_free, nix_build_env_from_derivation, nix_store_path_free
  */
 nix_build_env * nix_get_dev_environment(
     nix_c_context * context,
     Store * store,
-    const StorePath * drv_path);
+    const StorePath * drv_path,
+    StorePath ** out_env_path);
 
 // cffi end
 #ifdef __cplusplus
