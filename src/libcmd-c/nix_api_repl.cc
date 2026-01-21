@@ -154,6 +154,11 @@ nix_err nix_debugger_run_pending(
         auto env = std::move(*g_captured_debug_env);
         g_captured_debug_env.reset();
 
+        // Clear the debugRepl callback before running the REPL
+        // so errors inside the REPL show proper tracebacks instead of
+        // being captured again by debugReplCapture
+        state->state.debugRepl = nullptr;
+
         nix::ReplExitStatus status = nix::AbstractNixRepl::runSimple(
             nix::ref<nix::EvalState>(state->statePtr),
             env);

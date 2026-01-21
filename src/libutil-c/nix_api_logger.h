@@ -162,6 +162,18 @@ nix_err nix_set_logger_callbacks(
     nix_log_cb on_log,
     void * user_data);
 
+/**
+ * @brief Reset the logger to the default SimpleLogger.
+ *
+ * This restores normal stderr output for Nix messages, which is useful
+ * when you want to stop capturing activity events (e.g., before running
+ * an interactive REPL that needs normal terminal output).
+ *
+ * @param[out] context Optional, stores error information
+ * @return NIX_OK if successful, error code otherwise
+ */
+nix_err nix_reset_logger(nix_c_context * context);
+
 // cffi end
 #ifdef __cplusplus
 }
