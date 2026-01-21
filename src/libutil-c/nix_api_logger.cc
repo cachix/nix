@@ -209,4 +209,16 @@ nix_err nix_set_logger_callbacks(
     NIXC_CATCH_ERRS
 }
 
+nix_err nix_reset_logger(nix_c_context * context)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        // Restore the default SimpleLogger
+        nix::logger = nix::makeSimpleLogger(true);
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
 } // extern "C"
