@@ -200,6 +200,26 @@ void nix_c_context_free(nix_c_context * context);
  */
 nix_err nix_libutil_init(nix_c_context * context);
 
+/**
+ * @brief Initializes the signal handler thread.
+ *
+ * This function starts a dedicated signal handler thread that handles
+ * SIGINT, SIGTERM, SIGHUP, SIGPIPE, and SIGWINCH. This is necessary
+ * for proper signal handling when using the REPL or other interactive
+ * features.
+ *
+ * The signal handler thread blocks these signals from other threads and
+ * handles them via sigwait(), which prevents conflicts with the Boehm GC's
+ * signal-based stop-the-world mechanism.
+ *
+ * This function should be called once before using the REPL.
+ *
+ * @param[out] context Optional, stores error information
+ * @return NIX_OK if the initialization is successful, or an error code
+ * otherwise.
+ */
+nix_err nix_init_signal_handler(nix_c_context * context);
+
 /** @defgroup settings Nix configuration settings
  *  @{
  */
