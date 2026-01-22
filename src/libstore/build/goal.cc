@@ -1,6 +1,7 @@
 #include "nix/store/build/goal.hh"
 #include "nix/store/build/worker.hh"
 #include "nix/store/worker-settings.hh"
+#include "nix/util/logging.hh"
 
 namespace nix {
 
@@ -210,8 +211,15 @@ Goal::Done Goal::amDone(ExitCode result)
     // expected behavior, not an error.
     if (result == ecFailed) {
         if (auto * failure = buildResult.tryGetFailure()) {
-            if (!preserveFailure && !waiters.empty())
+            if (auto actId = getActivityId()) {
+                // Log with activity context while the activity is still alive.
+                // This allows log consumers (like TUIs) to associate errors with their activities.
+                std::optional<PushActivity> pact;
+                pact.emplace(*actId);
                 logError(failure->info());
+            } else if (!preserveFailure && !waiters.empty()) {
+                logError(failure->info());
+            }
         }
     }
 

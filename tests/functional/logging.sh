@@ -41,4 +41,19 @@ if [[ "$NIX_REMOTE" != "daemon" ]]; then
     jq < "$TEST_ROOT/log.json"
     grep '{"action":"start","fields":\[".*-dependencies-top.drv","",1,1\],"id":.*,"level":3,"parent":0' "$TEST_ROOT/log.json" >&2
     (( $(grep -c '{"action":"msg","level":5,"msg":"executing builder .*"}' "$TEST_ROOT/log.json" ) == 5 ))
+
+    # Test that error messages include parent field linking to failed build activity.
+    clearStore
+    rm -f "$TEST_ROOT/fail-log.json"
+    expect 1 nix build --impure --file ./logging/failing-build.nix --no-link --json-log-path "$TEST_ROOT/fail-log.json" 2>&1
+
+    # Find the build activity ID (type 105 = actBuild)
+    build_activity_id=$(jq -r 'select(.action == "start" and .type == 105) | .id' "$TEST_ROOT/fail-log.json" | tail -1)
+    [[ -n "$build_activity_id" ]] || { echo "Could not find build activity"; exit 1; }
+
+    # Verify at least one error message has parent field pointing to build activity
+    # (There may be multiple error messages; we check if any has the correct parent)
+    error_with_parent=$(jq -r 'select(.action == "msg" and .level == 0 and (.msg | contains("Cannot build")) and .parent) | .parent' "$TEST_ROOT/fail-log.json" | head -1)
+    [[ "$error_with_parent" == "$build_activity_id" ]] || { echo "No error message with parent ($error_with_parent) matching build activity ($build_activity_id)"; exit 1; }
+    echo "Error message correctly links to build activity $build_activity_id"
 fi
