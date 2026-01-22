@@ -400,6 +400,12 @@ public:
     virtual void cleanup() {}
 
     /**
+     * Return the activity ID for this goal, if any.
+     * Used to set the activity context when logging errors.
+     */
+    virtual std::optional<uint64_t> getActivityId() const { return std::nullopt; }
+
+    /**
      * Hack to say that this goal should not log `ex`, but instead keep
      * it around. Set by a waitee which sees itself as the designated
      * continuation of this goal, responsible for reporting its

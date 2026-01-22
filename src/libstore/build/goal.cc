@@ -1,6 +1,7 @@
 #include "nix/store/build/goal.hh"
 #include "nix/store/build/worker.hh"
 #include "nix/store/globals.hh"
+#include "nix/util/logging.hh"
 
 namespace nix {
 
@@ -142,10 +143,21 @@ Goal::Done Goal::amDone(ExitCode result, std::optional<Error> ex)
     exitCode = result;
 
     if (ex) {
-        if (!preserveException && !waiters.empty())
+        // Log the error with activity context while the activity is still alive.
+        // This allows log consumers (like TUIs) to associate errors with their activities.
+        if (auto actId = getActivityId()) {
+            std::optional<PushActivity> pact;
+            pact.emplace(*actId);
             logError(ex->info());
-        else
+        }
+
+        // Store or log the exception based on whether we need to preserve it
+        if (preserveException || waiters.empty()) {
             this->ex = std::move(*ex);
+        } else if (!getActivityId()) {
+            // Only log here if we didn't log above (no activity ID)
+            logError(ex->info());
+        }
     }
 
     for (auto & i : waiters) {

@@ -97,6 +97,11 @@ private:
 
     std::string key() override;
 
+    std::optional<uint64_t> getActivityId() const override
+    {
+        return act ? std::optional(act->id) : std::nullopt;
+    }
+
     /**
      * The states.
      */

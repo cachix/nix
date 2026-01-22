@@ -4,6 +4,7 @@
 #include "nix/store/build/derivation-trampoline-goal.hh"
 #include "nix/store/local-store.hh"
 #include "nix/util/strings.hh"
+#include "nix/util/logging.hh"
 
 namespace nix {
 
@@ -19,12 +20,19 @@ void Store::buildPaths(const std::vector<DerivedPath> & reqs, BuildMode buildMod
 
     StringSet failed;
     std::optional<Error> ex;
+    std::optional<uint64_t> exActivityId; // Track the activity ID of the goal that produced the first exception
     for (auto & i : goals) {
         if (i->ex) {
-            if (ex)
+            if (ex) {
+                // Set the activity context so the error is logged as a child of the goal's activity
+                std::optional<PushActivity> pact;
+                if (auto actId = i->getActivityId())
+                    pact.emplace(*actId);
                 logError(i->ex->info());
-            else
+            } else {
                 ex = std::move(i->ex);
+                exActivityId = i->getActivityId();
+            }
         }
         if (i->exitCode != Goal::ecSuccess) {
             if (auto i2 = dynamic_cast<DerivationTrampolineGoal *>(i.get()))
@@ -35,6 +43,12 @@ void Store::buildPaths(const std::vector<DerivedPath> & reqs, BuildMode buildMod
     }
 
     if (failed.size() == 1 && ex) {
+        // Log the error with the activity context before throwing,
+        // so log consumers can associate the error with the failed build
+        std::optional<PushActivity> pact;
+        if (exActivityId)
+            pact.emplace(*exActivityId);
+        logError(ex->info());
         ex->withExitStatus(worker.failingExitStatus());
         throw std::move(*ex);
     } else if (!failed.empty()) {

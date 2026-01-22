@@ -283,6 +283,9 @@ struct JSONLogger : Logger
         json["level"] = ei.level;
         json["msg"] = oss.str();
         json["raw_msg"] = ei.msg.str();
+        // Include the current activity as the parent if there is one
+        if (auto parent = getCurActivity())
+            json["parent"] = parent;
         to_json(json, ei.pos);
 
         if (loggerSettings.showTrace.get() && !ei.traces.empty()) {
