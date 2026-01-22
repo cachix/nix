@@ -4,6 +4,7 @@
 #include "nix/util/logging.hh"
 #include "nix_api_util_internal.h"
 #include "nix/util/util.hh"
+#include "nix/util/signals.hh"
 
 #include <cxxabi.h>
 #include <typeinfo>
@@ -112,6 +113,17 @@ nix_err nix_libutil_init(nix_c_context * context)
         context->last_err_code = NIX_OK;
     try {
         nix::initLibUtil();
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_init_signal_handler(nix_c_context * context)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        nix::unix::startSignalHandlerThread();
         return NIX_OK;
     }
     NIXC_CATCH_ERRS
