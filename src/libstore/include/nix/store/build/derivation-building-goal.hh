@@ -62,6 +62,13 @@ private:
 
     std::unique_ptr<MaintainCount<uint64_t>> mcRunningBuilds;
 
+    /**
+     * Non-owning pointer to the current build activity.
+     * Set when a BuildLog is created in buildWithHook/buildLocally,
+     * used by getActivityId() to associate errors with build activities.
+     */
+    const Activity * currentActivity = nullptr;
+
     std::string key() override;
 
     struct LocalBuildCapability
@@ -69,6 +76,13 @@ private:
         LocalStore & localStore;
         const ExternalBuilder * externalBuilder;
     };
+
+    std::optional<uint64_t> getActivityId() const override
+    {
+        if (currentActivity)
+            return currentActivity->id;
+        return std::nullopt;
+    }
 
     /**
      * The states.

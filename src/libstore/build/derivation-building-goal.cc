@@ -640,6 +640,7 @@ Goal::Co DerivationBuildingGoal::buildWithHook(
             actBuild,
             msg,
             Logger::Fields{worker.store.printStorePath(drvPath), hook->machineName, 1, 1}));
+    currentActivity = buildLog->act.get();
     mcRunningBuilds = std::make_unique<MaintainCount<uint64_t>>(worker.runningBuilds);
     worker.updateProgress();
 
@@ -806,6 +807,7 @@ Goal::Co DerivationBuildingGoal::buildLocally(
             worker.settings.logLines,
             std::make_unique<Activity>(
                 *logger, lvlInfo, actBuild, msg, Logger::Fields{worker.store.printStorePath(drvPath), "", 1, 1}));
+        currentActivity = buildLog->act.get();
         mcRunningBuilds = std::make_unique<MaintainCount<uint64_t>>(worker.runningBuilds);
         worker.updateProgress();
     };
