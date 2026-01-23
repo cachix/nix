@@ -235,6 +235,36 @@ nix_err nix_flake_lock_flags_add_input_update(
     nix_c_context * context, nix_flake_lock_flags * flags, const char * inputPath, size_t inputPathLen);
 
 /**
+ * @brief Enable or disable registry lookups for flake input resolution.
+ *
+ * When enabled, indirect flake references like `nixpkgs` or `flake:nixpkgs`
+ * can be resolved through the flake registry. When disabled (the default),
+ * such references will cause an error.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] flags The flags to modify
+ * @param[in] useRegistries Whether to enable registry lookups
+ * @return NIX_OK on success, NIX_ERR on failure
+ */
+nix_err nix_flake_lock_flags_set_use_registries(
+    nix_c_context * context, nix_flake_lock_flags * flags, bool useRegistries);
+
+/**
+ * @brief Set recreateLockFile flag to re-resolve all inputs from scratch.
+ *
+ * When enabled, the lock file is recreated from scratch, ignoring all
+ * existing locks. This is the equivalent of `nix flake update` with no
+ * specific input arguments.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] flags The flags to modify
+ * @param[in] recreate Whether to recreate the lock file
+ * @return NIX_OK on success, NIX_ERR on failure
+ */
+nix_err nix_flake_lock_flags_set_recreate_lock_file(
+    nix_c_context * context, nix_flake_lock_flags * flags, bool recreate);
+
+/**
  * @brief Lock a flake, if not already locked.
  * @param[out] context Optional, stores error information
  * @param[in] settings The flake (and fetch) settings to use
