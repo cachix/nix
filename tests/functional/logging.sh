@@ -42,6 +42,17 @@ if [[ "$NIX_REMOTE" != "daemon" ]]; then
     grep '{"action":"start","fields":\[".*-dependencies-top.drv","",1,1\],"id":.*,"level":3,"parent":0' "$TEST_ROOT/log.json" >&2
     (( $(grep -c '{"action":"msg","level":5,"msg":"executing builder .*"}' "$TEST_ROOT/log.json" ) == 5 ))
 
+    # Test that upfront build totals are signaled via setExpected before builds start.
+    # resSetExpected = 106, actBuilds = 104
+    # The setExpected result for builds should appear before the first build activity starts.
+    first_build_line=$(grep -n '"action":"start".*"type":105' "$TEST_ROOT/log.json" | head -1 | cut -d: -f1)
+    setexpected_builds_line=$(grep -n '"action":"result".*"type":106.*"fields":\[104,' "$TEST_ROOT/log.json" | head -1 | cut -d: -f1)
+    [[ -n "$setexpected_builds_line" ]] || { echo "setExpected for builds not found"; exit 1; }
+    [[ -n "$first_build_line" ]] || { echo "first build activity not found"; exit 1; }
+    (( setexpected_builds_line < first_build_line )) || { echo "setExpected for builds ($setexpected_builds_line) should appear before first build ($first_build_line)"; exit 1; }
+    # Verify the expected build count is 5 (dependencies-top + input-0 + input-1 + input-2 + fod-input)
+    jq -e 'select(.action == "result" and .type == 106 and .fields[0] == 104 and .fields[1] == 5)' "$TEST_ROOT/log.json" > /dev/null || { echo "Expected 5 builds in setExpected"; exit 1; }
+
     # Test that error messages include parent field linking to failed build activity.
     clearStore
     rm -f "$TEST_ROOT/fail-log.json"
