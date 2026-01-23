@@ -203,6 +203,17 @@ nix_err nix_flake_lock_flags_add_input_update(
     NIXC_CATCH_ERRS
 }
 
+nix_err nix_flake_lock_flags_set_use_registries(
+    nix_c_context * context, nix_flake_lock_flags * flags, bool useRegistries)
+{
+    nix_clear_err(context);
+    try {
+        flags->lockFlags->useRegistries = useRegistries;
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
 nix_locked_flake * nix_flake_lock(
     nix_c_context * context,
     nix_fetchers_settings * fetchSettings,
