@@ -2240,6 +2240,7 @@ static void prim_hashFile(EvalState & state, const PosIdx pos, Value ** args, Va
         state.error<EvalError>("unknown hash algorithm '%1%'", algo).atPos(pos).debugThrow();
 
     auto path = realisePath(state, pos, *args[1]);
+    printTalkative("devenv hashFile: '%1%'", path);
 
     v.mkString(hashString(*ha, path.readFile()).to_string(HashFormat::Base16, false));
 }
@@ -2292,6 +2293,7 @@ static const Value & fileTypeToString(EvalState & state, SourceAccessor::Type ty
 static void prim_readFileType(EvalState & state, const PosIdx pos, Value ** args, Value & v)
 {
     auto path = realisePath(state, pos, *args[0], std::nullopt);
+    printTalkative("devenv readFileType: '%1%'", path);
     /* Retrieve the directory entry type and stringize it. */
     v = fileTypeToString(state, path.lstat().type);
 }
@@ -2784,6 +2786,7 @@ static void prim_filterSource(EvalState & state, const PosIdx pos, Value ** args
         *args[1],
         context,
         "while evaluating the second argument (the path to filter) passed to 'builtins.filterSource'");
+    printTalkative("devenv filterSource: '%1%'", path);
     state.forceFunction(*args[0], pos, "while evaluating the first argument passed to builtins.filterSource");
 
     addPath(
@@ -2888,6 +2891,8 @@ static void prim_path(EvalState & state, const PosIdx pos, Value ** args, Value 
             .debugThrow();
     if (name.empty())
         name = path->baseName();
+
+    printTalkative("devenv path: '%1%'", *path);
 
     addPath(state, pos, name, *path, filterFun, method, expectedHash, v, context);
 }
