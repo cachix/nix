@@ -1093,8 +1093,6 @@ struct ExprParseFile : Expr, gc
 
     void eval(EvalState & state, Env & env, Value & v) override
     {
-        printTalkative("evaluating file '%s'", path);
-
         auto e = state.parseExprFromFile(path);
 
         try {
@@ -1127,10 +1125,13 @@ void EvalState::evalFile(const SourcePath & path, Value & v, bool mustBeTrivial)
     }
 
     if (auto v2 = getConcurrent(*fileEvalCache, *resolvedPath)) {
+        printTalkative("evaluating file '%s' (cached)", *resolvedPath);
         forceValue(**v2, noPos);
         v = **v2;
         return;
     }
+
+    printTalkative("evaluating file '%s'", *resolvedPath);
 
     Value * vExpr;
     // FIXME: put ExprParseFile on the stack instead of the heap once
