@@ -623,6 +623,33 @@ nix_err nix_lock_file_inputs_iterator_is_locked(
     bool * result);
 
 /**
+ * @brief Get the fingerprint of the current input
+ *
+ * Returns a content identifier for the locked input that can be used to detect changes.
+ * The fingerprint format varies by input type:
+ * - git/github/mercurial: the revision hash (e.g., "abc123...")
+ * - tarball/path: the narHash in SRI format (e.g., "sha256-abc...")
+ *
+ * For "follows" inputs (InputAttrPath), returns an empty string since they
+ * inherit their fingerprint from the target input.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] iter The iterator pointing to the input
+ * @param[in] fetchSettings The fetch settings to use
+ * @param[in] store The store to use for fingerprint computation
+ * @param[in] callback Called with the fingerprint string or empty string if not available
+ * @param[in] user_data Optional data passed to the callback
+ * @return NIX_OK on success, NIX_ERR on failure
+ */
+nix_err nix_lock_file_inputs_iterator_get_fingerprint(
+    nix_c_context * context,
+    nix_lock_file_inputs_iterator * iter,
+    nix_fetchers_settings * fetchSettings,
+    Store * store,
+    nix_get_string_callback callback,
+    void * user_data);
+
+/**
  * @brief Free an iterator
  * Does not fail.
  * @param[in] iter The iterator to free
