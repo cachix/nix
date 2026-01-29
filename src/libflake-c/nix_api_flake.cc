@@ -7,6 +7,7 @@
 #include "nix_api_expr_internal.h"
 #include "nix_api_fetchers_internal.hh"
 #include "nix_api_fetchers.h"
+#include "nix_api_store_internal.h"
 
 #include "nix/flake/flake.hh"
 
@@ -560,6 +561,31 @@ nix_err nix_lock_file_inputs_iterator_is_locked(
             *result = true;
         }
         return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_lock_file_inputs_iterator_get_fingerprint(
+    nix_c_context * context,
+    nix_lock_file_inputs_iterator * iter,
+    Store * store,
+    nix_get_string_callback callback,
+    void * user_data)
+{
+    nix_clear_err(context);
+    if (!iter->valid) {
+        return nix_set_err_msg(context, NIX_ERR_UNKNOWN, "Iterator is not valid");
+    }
+    try {
+        const auto & edge = iter->current->second;
+
+        if (auto lockedNode = std::get_if<nix::ref<nix::flake::LockedNode>>(&edge)) {
+            if (auto fingerprint = (*lockedNode)->lockedRef.input.getFingerprint(store->ptr)) {
+                return call_nix_get_string_callback(*fingerprint, callback, user_data);
+            }
+        }
+        // No fingerprint available (either follows input or input without fingerprint)
+        return call_nix_get_string_callback("", callback, user_data);
     }
     NIXC_CATCH_ERRS
 }

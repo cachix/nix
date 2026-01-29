@@ -111,6 +111,13 @@ struct PathInputScheme : InputScheme
         return true;
     }
 
+    std::optional<std::string> getFingerprint(ref<Store> store, const Input & input) const override
+    {
+        if (auto narHash = input.getNarHash())
+            return "path:" + narHash->to_string(HashFormat::SRI, true);
+        return std::nullopt;
+    }
+
     std::filesystem::path getAbsPath(const Input & input) const
     {
         auto path = getStrAttr(input.attrs, "path");
