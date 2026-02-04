@@ -782,9 +782,24 @@ void LocalStore::collectGarbage(const GCOptions & options, GCResults & results)
             }
         }
         for (auto & path : topoSortPaths(visited)) {
-            if (!dead.insert(path).second)
+            if (dead.count(path))
                 continue;
             if (shouldDelete) {
+                {
+                    auto hashPart = path.hashPart();
+                    auto shared(_shared.lock());
+                    if (shared->tempRoots.count(hashPart)) {
+                        debug("'%s' became a temporary root after initial check; skipping", printStorePath(path));
+                        alive.insert(path);
+                        continue;
+                    }
+                    shared->pending = hashPart;
+                }
+                Finally clearPending([&]() {
+                    auto shared(_shared.lock());
+                    shared->pending.reset();
+                    wakeup.notify_all();
+                });
                 try {
                     invalidatePathChecked(path);
                     deleteFromStore(path.to_string());
@@ -795,6 +810,7 @@ void LocalStore::collectGarbage(const GCOptions & options, GCResults & results)
                     printError("BUG: %s", e.what());
                 }
             }
+            dead.insert(path);
         }
     };
 
