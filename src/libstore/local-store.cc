@@ -1081,6 +1081,12 @@ void LocalStore::addToStore(const ValidPathInfo & info, Source & source, RepairF
 
         addTempRoot(info.path);
 
+        /* Also add temp roots for the references to prevent a race where
+           auto-GC (called below) could delete a reference between the
+           time we check isValidPath and when we register the new path. */
+        for (auto & ref : info.references)
+            addTempRoot(ref);
+
         if (repair || !isValidPath(info.path)) {
 
             PathLocks outputLock;
@@ -1278,6 +1284,15 @@ StorePath LocalStore::addToStoreFromDump(
     auto dstPath = makeFixedOutputPathFromCA(name, desc);
 
     addTempRoot(dstPath);
+
+    /* Also add temp roots for the references to prevent a race where
+       auto-GC (called below) could delete a reference between the
+       time we check isValidPath and when we register the new path.
+       This can happen if the references were added to the store by a
+       different daemon worker whose temp roots file is no longer
+       present (e.g., the worker exited). */
+    for (auto & ref : references)
+        addTempRoot(ref);
 
     if (repair || !isValidPath(dstPath)) {
 
