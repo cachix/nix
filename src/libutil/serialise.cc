@@ -10,6 +10,8 @@
 #include <memory>
 
 #include <boost/coroutine2/coroutine.hpp>
+#include <boost/coroutine2/protected_fixedsize_stack.hpp>
+#include <boost/context/stack_traits.hpp>
 
 #ifdef _WIN32
 #  include <fileapi.h>
@@ -327,7 +329,13 @@ std::unique_ptr<FinishSink> sourceToSink(fun<void(Source &)> reader)
             cur = in;
 
             if (!coro) {
-                coro = coro_t::push_type([&](coro_t::pull_type & yield) {
+                // Use 1 MiB instead of Boost's default 128KB.
+                std::size_t stack_size = std::max<std::size_t>(
+                    1024 * 1024, // 1 MiB
+                    boost::context::stack_traits::minimum_size());
+                coro = coro_t::push_type(
+                    boost::coroutines2::protected_fixedsize_stack(stack_size),
+                    [&](coro_t::pull_type & yield) {
                     LambdaSource source([&](char * out, size_t out_len) {
                         if (cur.empty()) {
                             yield();
@@ -384,7 +392,13 @@ std::unique_ptr<Source> sinkToSource(fun<void(Sink &)> writer, fun<void()> eof)
         {
             bool hasCoro = coro.has_value();
             if (!hasCoro) {
-                coro = coro_t::pull_type([&](coro_t::push_type & yield) {
+                // Use 1 MiB instead of Boost's default 128KB.
+                std::size_t stack_size = std::max<std::size_t>(
+                    1024 * 1024, // 1 MiB
+                    boost::context::stack_traits::minimum_size());
+                coro = coro_t::pull_type(
+                    boost::coroutines2::protected_fixedsize_stack(stack_size),
+                    [&](coro_t::push_type & yield) {
                     LambdaSink sink([&](std::string_view data) {
                         if (!data.empty()) {
                             yield(data);
