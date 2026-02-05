@@ -369,12 +369,12 @@ void StringSource::skip(size_t len)
     pos += len;
 }
 
-/* 512KiB is a conservative estimate for deeply nested NARs, which are limited
+/* 1MiB is a conservative estimate for deeply nested NARs, which are limited
    to 64 levels. We also tend to allocate rather large buffers on the stack, so
    we should leave plenty of headroom. Note that no evaluation is supposed to
    happen on sourceToSink/sinkToSource coroutine stacks (for Boehm GC reasons),
    which requires much more stack space. */
-static constexpr size_t defaultCoroutineStackSize = 512 * 1024;
+static constexpr size_t defaultCoroutineStackSize = 1024 * 1024;
 
 std::unique_ptr<FinishSink> sourceToSink(fun<void(Source &)> reader)
 {
