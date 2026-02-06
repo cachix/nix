@@ -86,6 +86,7 @@ DownloadFileResult downloadFile(
         auto source = StringSource{sink.s};
         store->addToStore(info, source, NoRepair, NoCheckSigs);
         storePath = std::move(info.path);
+        store->addTempRoot(*storePath);
     }
 
     /* Cache metadata for all URLs in the redirect chain. */

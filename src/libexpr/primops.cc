@@ -2622,6 +2622,9 @@ static void prim_toFile(EvalState & state, const PosIdx pos, Value ** args, Valu
                                                      state.repair);
                                              });
 
+    if (!settings.readOnlyMode)
+        state.store->addTempRoot(storePath);
+
     /* Note: we don't need to add `context' to the context of the
        result, since `storePath' itself has references to the paths
        used in args[1]. */
