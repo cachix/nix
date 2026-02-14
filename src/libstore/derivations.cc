@@ -115,23 +115,42 @@ StorePath writeDerivation(Store & store, const Derivation & drv, RepairFlag repa
        held during a garbage collection). */
     auto suffix = std::string(drv.name) + drvExtension;
     auto contents = drv.unparse(store, false);
-    return readOnly || settings.readOnlyMode ? store.makeFixedOutputPathFromCA(
-                                                   suffix,
-                                                   TextInfo{
-                                                       .hash = hashString(HashAlgorithm::SHA256, contents),
-                                                       .references = std::move(references),
-                                                   })
-                                             : ({
-                                                   StringSource s{contents};
-                                                   store.addToStoreFromDump(
-                                                       s,
-                                                       suffix,
-                                                       FileSerialisationMethod::Flat,
-                                                       ContentAddressMethod::Raw::Text,
-                                                       HashAlgorithm::SHA256,
-                                                       references,
-                                                       repair);
-                                               });
+
+    if (readOnly || settings.readOnlyMode)
+        return store.makeFixedOutputPathFromCA(
+            suffix,
+            TextInfo{
+                .hash = hashString(HashAlgorithm::SHA256, contents),
+                .references = std::move(references),
+            });
+
+    auto path = store.makeFixedOutputPathFromCA(
+        suffix,
+        TextInfo{
+            .hash = hashString(HashAlgorithm::SHA256, contents),
+            .references = references,
+        });
+
+    /* In case the derivation is already valid, we bail out early since that's
+       faster. But we need to make sure that the derivation has a corresponding
+       temproot. It is added by the remote in addToStoreFromDump, but we'd like
+       to avoid sending a lot of drv contents to the daemon. */
+    store.addTempRoot(path);
+
+    if (store.isValidPath(path) && !repair)
+        return path;
+
+    StringSource s{contents};
+    store.addToStoreFromDump(
+        s,
+        suffix,
+        FileSerialisationMethod::Flat,
+        ContentAddressMethod::Raw::Text,
+        HashAlgorithm::SHA256,
+        references,
+        repair);
+
+    return path;
 }
 
 namespace {

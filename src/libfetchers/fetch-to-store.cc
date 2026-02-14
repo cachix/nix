@@ -34,6 +34,11 @@ StorePath fetchToStore(
     if (fingerprint) {
         cacheKey = makeFetchToStoreCacheKey(std::string{name}, *fingerprint, method, subpath.abs());
         if (auto res = settings.getCache()->lookupStorePath(*cacheKey, store)) {
+            /* Add a temproot before returning to prevent accidental GC in case the
+               input is cached. Note that this must be done before to avoid races. */
+            if (mode != FetchMode::DryRun)
+                store.addTempRoot(res->storePath);
+
             debug("store path cache hit for '%s'", path);
             return res->storePath;
         }
