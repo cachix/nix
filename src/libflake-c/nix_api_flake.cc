@@ -219,6 +219,17 @@ nix_err nix_flake_lock_flags_set_use_registries(
     NIXC_CATCH_ERRS
 }
 
+nix_err nix_flake_lock_flags_set_recreate_lock_file(
+    nix_c_context * context, nix_flake_lock_flags * flags, bool recreate)
+{
+    nix_clear_err(context);
+    try {
+        flags->lockFlags->recreateLockFile = recreate;
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
 nix_locked_flake * nix_flake_lock(
     nix_c_context * context,
     nix_fetchers_settings * fetchSettings,

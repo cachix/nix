@@ -250,6 +250,21 @@ nix_err nix_flake_lock_flags_set_use_registries(
     nix_c_context * context, nix_flake_lock_flags * flags, bool useRegistries);
 
 /**
+ * @brief Set recreateLockFile flag to re-resolve all inputs from scratch.
+ *
+ * When enabled, the lock file is recreated from scratch, ignoring all
+ * existing locks. This is the equivalent of `nix flake update` with no
+ * specific input arguments.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] flags The flags to modify
+ * @param[in] recreate Whether to recreate the lock file
+ * @return NIX_OK on success, NIX_ERR on failure
+ */
+nix_err nix_flake_lock_flags_set_recreate_lock_file(
+    nix_c_context * context, nix_flake_lock_flags * flags, bool recreate);
+
+/**
  * @brief Lock a flake, if not already locked.
  * @param[out] context Optional, stores error information
  * @param[in] settings The flake (and fetch) settings to use
