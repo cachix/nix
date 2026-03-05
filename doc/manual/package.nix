@@ -87,6 +87,7 @@ mkMesonDerivation (finalAttrs: {
     meson
     ninja
     (lib.getBin lowdown-unsandboxed)
+    mdbook
     jq
     python3
   ]
