@@ -1259,6 +1259,16 @@ void DerivationBuilderImpl::runChild()
         struct rlimit limit = {0, RLIM_INFINITY};
         setrlimit(RLIMIT_CORE, &limit);
 
+        /* Ensure store outputs get standard Nix permissions (0444/0555)
+           regardless of the parent process umask. Without this, a
+           permissive umask (e.g. 0002) causes builder outputs to have
+           group-writable permissions, which registerOutputs() rejects
+           as "suspicious ownership or permission". This is especially
+           important for C API consumers (e.g. nix_string_realise)
+           which don't call initNix() and therefore don't inherit the
+           umask(0022) that the CLI sets. */
+        umask(0022);
+
         // FIXME: set other limits to deterministic values?
 
         setUser();
