@@ -62,6 +62,9 @@ StorePath fetchToStore(
                          ? store.computeStorePath(name, path, method, HashAlgorithm::SHA256, {}, filter2).first
                          : store.addToStore(name, path, method, HashAlgorithm::SHA256, {}, filter2, repair);
 
+    if (mode != FetchMode::DryRun)
+        store.addTempRoot(storePath);
+
     debug(mode == FetchMode::DryRun ? "hashed '%s'" : "copied '%s' to '%s'", path, store.printStorePath(storePath));
 
     if (cacheKey && mode == FetchMode::Copy)
