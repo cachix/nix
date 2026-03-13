@@ -2479,6 +2479,11 @@ StorePath EvalState::copyPathToStore(NixStringContext & context, const SourcePat
         return dstPath;
     }();
 
+    /* Add a temproot to prevent GC from deleting the path, even on
+       srcToStore cache hits where fetchToStore is not called. */
+    if (!settings.readOnlyMode)
+        store->addTempRoot(dstPath);
+
     context.insert(NixStringContextElem::Opaque{.path = dstPath});
     return dstPath;
 }
