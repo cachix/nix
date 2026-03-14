@@ -57,24 +57,68 @@ let
 
   private-flake-rev = "9f1dd0df5b54a7dc75b618034482ed42ce34383d";
 
-  private-flake-api = pkgs.runCommand "private-flake" { } ''
-    mkdir -p $out/{commits,tarball}
+  private-flake-git-refs = pkgs.runCommand "private-flake-git-refs" { } ''
+        mkdir -p $out/info
+        pkt_line() {
+          local content="$1"
+          local len=$(( ''${#content} + 4 ))
+          printf '%04x%s' "$len" "$content"
+        }
+        pkt_line_with_capabilities() {
+          local oid="$1"
+          local ref="$2"
+          local capabilities="$3"
+          local len=$(( ''${#oid} + ''${#ref} + ''${#capabilities} + 7 ))
+          printf '%04x%s %s\0%s\n' "$len" "$oid" "$ref" "$capabilities"
+        }
+        {
+          pkt_line "# service=git-upload-pack
+    "
+          printf '0000'
+          pkt_line_with_capabilities \
+            "${private-flake-rev}" \
+            HEAD \
+            "symref=HEAD:refs/heads/master"
+          pkt_line "${private-flake-rev} refs/heads/master
+    "
+          printf '0000'
+        } > $out/info/refs
+  '';
 
-    # Setup https://docs.github.com/en/rest/commits/commits#get-a-commit
-    echo '{"sha": "${private-flake-rev}", "commit": {"tree": {"sha": "ffffffffffffffffffffffffffffffffffffffff"}}}' > $out/commits/HEAD
-
-    # Setup tarball download via API
+  private-flake-tarball = pkgs.runCommand "private-flake-tarball" { } ''
+    mkdir -p $out/tarball
     dir=private-flake
     mkdir $dir
     echo '{ outputs = {...}: {}; }' > $dir/flake.nix
     tar cfz $out/tarball/${private-flake-rev} $dir --hard-dereference
   '';
 
-  nixpkgs-api = pkgs.runCommand "nixpkgs-flake" { } ''
-    mkdir -p $out/commits
-
-    # Setup https://docs.github.com/en/rest/commits/commits#get-a-commit
-    echo '{"sha": "${nixpkgs.rev}", "commit": {"tree": {"sha": "ffffffffffffffffffffffffffffffffffffffff"}}}' > $out/commits/HEAD
+  nixpkgs-git-refs = pkgs.runCommand "nixpkgs-git-refs" { } ''
+        mkdir -p $out/info
+        pkt_line() {
+          local content="$1"
+          local len=$(( ''${#content} + 4 ))
+          printf '%04x%s' "$len" "$content"
+        }
+        pkt_line_with_capabilities() {
+          local oid="$1"
+          local ref="$2"
+          local capabilities="$3"
+          local len=$(( ''${#oid} + ''${#ref} + ''${#capabilities} + 7 ))
+          printf '%04x%s %s\0%s\n' "$len" "$oid" "$ref" "$capabilities"
+        }
+        {
+          pkt_line "# service=git-upload-pack
+    "
+          printf '0000'
+          pkt_line_with_capabilities \
+            "${nixpkgs.rev}" \
+            HEAD \
+            "symref=HEAD:refs/heads/master"
+          pkt_line "${nixpkgs.rev} refs/heads/master
+    "
+          printf '0000'
+        } > $out/info/refs
   '';
 
   archive = pkgs.runCommand "nixpkgs-flake" { } ''
@@ -124,12 +168,8 @@ in
           sslServerCert = "${cert}/server.crt";
           servedDirs = [
             {
-              urlPath = "/repos/NixOS/nixpkgs";
-              dir = nixpkgs-api;
-            }
-            {
               urlPath = "/repos/fancy-enterprise/private-flake";
-              dir = private-flake-api;
+              dir = private-flake-tarball;
             }
           ];
         };
@@ -137,10 +177,23 @@ in
           forceSSL = true;
           sslServerKey = "${cert}/server.key";
           sslServerCert = "${cert}/server.crt";
+          extraConfig = ''
+            <LocationMatch "\.git/info/refs$">
+              ForceType application/x-git-upload-pack-advertisement
+            </LocationMatch>
+          '';
           servedDirs = [
             {
               urlPath = "/NixOS/nixpkgs";
               dir = archive;
+            }
+            {
+              urlPath = "/NixOS/nixpkgs.git";
+              dir = nixpkgs-git-refs;
+            }
+            {
+              urlPath = "/fancy-enterprise/private-flake.git";
+              dir = private-flake-git-refs;
             }
           ];
         };
@@ -196,6 +249,14 @@ in
       assert "github:NixOS/nixpkgs" in out, "nixpkgs flake not found"
       assert "github:fancy-enterprise/private-flake" in out, "private flake not found"
       cat_log()
+
+      # GitHub ref resolution uses smart HTTP directly. A user's Git URL rewrite
+      # must not unexpectedly switch this internal request to SSH.
+      client.succeed("mkdir -p /root/.config/git")
+      client.succeed(
+          "printf '%s\\n' '[url \"ssh://git@github.com/\"]' "
+          "'    insteadOf = https://github.com/' > /root/.config/git/config"
+      )
 
       # If no github access token is provided, nix should use the public archive url...
       out = client.succeed("nix flake metadata nixpkgs --json")

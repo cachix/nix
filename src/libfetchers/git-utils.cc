@@ -20,6 +20,7 @@
 #include <git2/branch.h>
 #include <git2/commit.h>
 #include <git2/config.h>
+#include <git2/credential.h>
 #include <git2/describe.h>
 #include <git2/errors.h>
 #include <git2/global.h>
@@ -1566,6 +1567,72 @@ bool isLegalRefName(const std::string & refName)
     }
 
     return false;
+}
+
+Hash resolveRemoteRef(const std::string & url, const std::string & ref, const Headers & headers)
+{
+    initLibGit2();
+
+    Remote remote;
+    git_remote_create_options opts = GIT_REMOTE_CREATE_OPTIONS_INIT;
+    opts.flags = GIT_REMOTE_CREATE_SKIP_INSTEADOF;
+    if (git_remote_create_with_opts(Setter(remote), url.c_str(), &opts))
+        throw Error("creating detached remote for '%s': %s", url, git_error_last()->message);
+
+    // Extract raw token from Authorization header for credential callback.
+    // GitHub's git smart HTTP transport uses basic auth, not the REST API
+    // "Authorization: token <T>" format. Provide the token via libgit2's
+    // credential callback so it handles 401 challenges correctly.
+    std::string token;
+    for (auto & [name, value] : headers) {
+        if (name == "Authorization") {
+            // Strip "token " or "Bearer " prefix to get the raw token
+            if (hasPrefix(value, "token "))
+                token = value.substr(6);
+            else if (hasPrefix(value, "Bearer "))
+                token = value.substr(7);
+            else
+                token = value;
+        }
+    }
+
+    git_remote_callbacks callbacks = GIT_REMOTE_CALLBACKS_INIT;
+    callbacks.payload = &token;
+    callbacks.credentials = [](git_credential ** out,
+                               const char *,
+                               const char * username_from_url,
+                               unsigned int allowed_types,
+                               void * payload) -> int {
+        auto * tok = static_cast<std::string *>(payload);
+        /* HTTPS: authenticate with the access token via basic auth. */
+        if (!tok->empty() && (allowed_types & GIT_CREDENTIAL_USERPASS_PLAINTEXT))
+            return git_credential_userpass_plaintext_new(out, "x-access-token", tok->c_str());
+        /* SSH: support callers that provide an explicit SSH URL. Git config
+           rewrites are disabled when creating the remote above. */
+        const char * username = username_from_url ? username_from_url : "git";
+        if (allowed_types & GIT_CREDENTIAL_SSH_KEY)
+            return git_credential_ssh_key_from_agent(out, username);
+        if (allowed_types & GIT_CREDENTIAL_USERNAME)
+            return git_credential_username_new(out, username);
+        return GIT_PASSTHROUGH;
+    };
+
+    if (git_remote_connect(remote.get(), GIT_DIRECTION_FETCH, &callbacks, nullptr, nullptr))
+        throw Error("connecting to remote '%s': %s", url, git_error_last()->message);
+
+    const git_remote_head ** refs;
+    size_t refCount;
+    if (git_remote_ls(&refs, &refCount, remote.get()))
+        throw Error("listing remote refs for '%s': %s", url, git_error_last()->message);
+
+    std::regex refRegex(ref == "HEAD" ? "HEAD" : fmt("refs/(heads|tags)/%s", ref));
+
+    for (size_t i = 0; i < refCount; i++) {
+        if (std::regex_match(refs[i]->name, refRegex))
+            return toHash(refs[i]->oid);
+    }
+
+    throw Error("could not find ref '%s' in remote '%s'", ref, url);
 }
 
 } // namespace nix
