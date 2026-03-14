@@ -389,21 +389,11 @@ struct GitHubInputScheme : GitArchiveInputScheme
     RefInfo getRevFromRef(nix::ref<Store> store, const Input & input) const override
     {
         auto host = getHost(input);
-        auto url = fmt(
-            host == "github.com" ? "https://api.%s/repos/%s/%s/commits/%s" : "https://%s/api/v3/repos/%s/%s/commits/%s",
-            host,
-            getOwner(input),
-            getRepo(input),
-            *input.getRef());
-
+        auto url = fmt("https://%s/%s/%s.git", host, getOwner(input), getRepo(input));
         Headers headers = makeHeadersWithAuthTokens(*input.settings, host, input);
 
-        auto downloadResult = downloadFile(store, *input.settings, url, "source", headers);
-        auto json = nlohmann::json::parse(store->getFSAccessor(downloadResult.storePath)->readFile(CanonPath::root));
-
-        return RefInfo{
-            .rev = Hash::parseAny(std::string{json["sha"]}, HashAlgorithm::SHA1),
-            .treeHash = Hash::parseAny(std::string{json["commit"]["tree"]["sha"]}, HashAlgorithm::SHA1)};
+        auto rev = resolveRemoteRef(url, *input.getRef(), headers);
+        return RefInfo{.rev = rev};
     }
 
     DownloadUrl getDownloadUrl(const Input & input) const override
