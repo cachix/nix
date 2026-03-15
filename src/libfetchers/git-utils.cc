@@ -15,6 +15,7 @@
 #include <git2/branch.h>
 #include <git2/commit.h>
 #include <git2/config.h>
+#include <git2/credential.h>
 #include <git2/describe.h>
 #include <git2/errors.h>
 #include <git2/global.h>
@@ -1362,16 +1363,35 @@ Hash resolveRemoteRef(const std::string & url, const std::string & ref, const He
     if (git_remote_create_detached(Setter(remote), url.c_str()))
         throw Error("creating detached remote for '%s': %s", url, git_error_last()->message);
 
-    // Convert Headers (vector<pair<string,string>>) to git_strarray
-    std::vector<std::string> headerStrs;
-    for (auto & [name, value] : headers)
-        headerStrs.push_back(name + ": " + value);
-    std::vector<char *> headerPtrs;
-    for (auto & s : headerStrs)
-        headerPtrs.push_back(s.data());
-    git_strarray customHeaders = {headerPtrs.data(), headerPtrs.size()};
+    // Extract raw token from Authorization header for credential callback.
+    // GitHub's git smart HTTP transport uses basic auth, not the REST API
+    // "Authorization: token <T>" format. Provide the token via libgit2's
+    // credential callback so it handles 401 challenges correctly.
+    std::string token;
+    for (auto & [name, value] : headers) {
+        if (name == "Authorization") {
+            // Strip "token " or "Bearer " prefix to get the raw token
+            if (hasPrefix(value, "token "))
+                token = value.substr(6);
+            else if (hasPrefix(value, "Bearer "))
+                token = value.substr(7);
+            else
+                token = value;
+        }
+    }
 
-    if (git_remote_connect(remote.get(), GIT_DIRECTION_FETCH, nullptr, nullptr, &customHeaders))
+    git_remote_callbacks callbacks = GIT_REMOTE_CALLBACKS_INIT;
+    callbacks.payload = &token;
+    callbacks.credentials = [](git_credential ** out, const char *, const char *, unsigned int allowed_types, void * payload) -> int {
+        auto * tok = static_cast<std::string *>(payload);
+        if (tok->empty())
+            return GIT_PASSTHROUGH;
+        if (allowed_types & GIT_CREDENTIAL_USERPASS_PLAINTEXT)
+            return git_credential_userpass_plaintext_new(out, "x-access-token", tok->c_str());
+        return GIT_PASSTHROUGH;
+    };
+
+    if (git_remote_connect(remote.get(), GIT_DIRECTION_FETCH, &callbacks, nullptr, nullptr))
         throw Error("connecting to remote '%s': %s", url, git_error_last()->message);
 
     const git_remote_head ** refs;
