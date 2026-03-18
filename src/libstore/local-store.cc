@@ -123,6 +123,8 @@ struct LocalStore::State::Stmts
     SQLiteStmt QueryValidPaths;
 };
 
+static std::atomic<unsigned int> nrLocalStores{0};
+
 LocalStore::LocalStore(ref<const Config> config)
     : Store{*config}
     , LocalFSStore{*config}
@@ -133,7 +135,7 @@ LocalStore::LocalStore(ref<const Config> config)
     , reservedPath(dbDir / "reserved")
     , schemaPath(dbDir / "schema")
     , tempRootsDir(config->stateDir.get() / "temproots")
-    , fnTempRoots(tempRootsDir / std::to_string(getpid()))
+    , fnTempRoots(tempRootsDir / fmt("%d-%d", getpid(), nrLocalStores++))
 {
     auto state(_state->lock());
     state->stmts = std::make_unique<State::Stmts>();
