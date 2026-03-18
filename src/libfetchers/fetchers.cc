@@ -338,6 +338,8 @@ std::pair<ref<SourceAccessor>, Input> Input::getAccessorUnchecked(ref<Store> sto
         try {
             auto storePath = computeStorePath(*store);
 
+            store->addTempRoot(storePath);
+
             store->ensurePath(storePath);
 
             debug("using substituted/cached input '%s' in '%s'", to_string(), store->printStorePath(storePath));

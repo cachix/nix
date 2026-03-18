@@ -55,8 +55,8 @@ void LocalStore::createTempRootsFile()
 
     while (1) {
         if (pathExists(fnTempRoots))
-            /* It *must* be stale, since there can be no two
-               processes with the same pid. */
+            /* The file is stale since each LocalStore instance
+               uses a unique filename (pid + counter). */
             unlink(fnTempRoots.c_str());
 
         *fdTempRoots = openLockFile(fnTempRoots, true);
