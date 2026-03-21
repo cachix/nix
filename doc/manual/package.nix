@@ -6,7 +6,9 @@
   ninja,
   lowdown-unsandboxed,
   mdbook,
-  mdbook-linkcheck,
+  # mdbook-linkcheck was removed from nixpkgs, replaced by mdbook-linkcheck2
+  mdbook-linkcheck ? null,
+  mdbook-linkcheck2 ? mdbook-linkcheck,
   jq,
   python3,
   rsync,
@@ -51,7 +53,7 @@ mkMesonDerivation (finalAttrs: {
     ninja
     (lib.getBin lowdown-unsandboxed)
     mdbook
-    mdbook-linkcheck
+    mdbook-linkcheck2
     jq
     python3
     rsync
