@@ -977,4 +977,48 @@ TEST_F(nix_api_store_test, nix_derivation_clone)
     nix_derivation_free(drv2);
 }
 
+TEST_F(NixApiStoreTestWithRealisedPath, nix_store_query_path_info_json_v3)
+{
+    std::string pathInfoJson;
+    auto ret = nix_store_query_path_info_json(ctx, store, outPath, NIX_PATH_INFO_JSON_FORMAT_V3, OBSERVE_STRING(pathInfoJson));
+    assert_ctx_ok();
+    ASSERT_EQ(NIX_OK, ret);
+
+    auto parsed = nlohmann::json::parse(pathInfoJson);
+    ASSERT_TRUE(parsed.contains("narHash"));
+    ASSERT_TRUE(parsed.contains("narSize"));
+    ASSERT_TRUE(parsed.contains("references"));
+    ASSERT_TRUE(parsed.contains("signatures"));
+    ASSERT_EQ(parsed["version"], 3);
+}
+
+TEST_F(NixApiStoreTestWithRealisedPath, nix_store_query_path_info_json_v1)
+{
+    std::string pathInfoJson;
+    auto ret = nix_store_query_path_info_json(ctx, store, outPath, NIX_PATH_INFO_JSON_FORMAT_V1, OBSERVE_STRING(pathInfoJson));
+    assert_ctx_ok();
+    ASSERT_EQ(NIX_OK, ret);
+
+    auto parsed = nlohmann::json::parse(pathInfoJson);
+    // V1 narHash is an SRI string
+    ASSERT_TRUE(parsed["narHash"].is_string());
+    // V1 references are full store paths
+    if (!parsed["references"].empty()) {
+        ASSERT_TRUE(parsed["references"][0].get<std::string>().find('/') != std::string::npos);
+    }
+}
+
+TEST_F(nix_api_store_test, nix_store_query_path_info_json_invalid_path)
+{
+    StorePath * path = nix_store_parse_path(ctx, store, (nixStoreDir + PATH_SUFFIX).c_str());
+    ASSERT_NE(path, nullptr);
+
+    std::string pathInfoJson;
+    auto ret = nix_store_query_path_info_json(ctx, store, path, NIX_PATH_INFO_JSON_FORMAT_V3, OBSERVE_STRING(pathInfoJson));
+    ASSERT_NE(ret, NIX_OK);
+    ASSERT_TRUE(pathInfoJson.empty());
+
+    nix_store_path_free(path);
+}
+
 } // namespace nixC
