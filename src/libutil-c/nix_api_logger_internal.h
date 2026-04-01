@@ -8,9 +8,11 @@
  */
 
 #include "nix/util/logging.hh"
+#include "nix/util/error.hh"
 #include "nix_api_logger.h"
 
 #include <memory>
+#include <sstream>
 
 namespace nix {
 
@@ -78,7 +80,15 @@ public:
 
     void logEI(const ErrorInfo & ei) override
     {
-        // No-op: we only care about activities
+        if (on_log) {
+            try {
+                std::ostringstream oss;
+                showErrorInfo(oss, ei, loggerSettings.showTrace.get());
+                log(ei.level, oss.view());
+            } catch (...) {
+                // Silently ignore callback errors
+            }
+        }
     }
 };
 
