@@ -34,14 +34,16 @@ typedef enum {
      * - narHash: SRI string (e.g. "sha256-...")
      * - references: full store paths (e.g. "/nix/store/...")
      * - ca: rendered string or null
+     * - deriver: full store path or null
      * - signatures: array of strings
      */
     NIX_PATH_INFO_JSON_FORMAT_V1 = 1,
     /**
      * Structured format.
-     * - narHash: structured object with algo and hash fields
+     * - narHash: SRI string (e.g. "sha256-...")
      * - references: store path base names only
      * - ca: structured object or null
+     * - deriver: structured object or null
      * - signatures: array of strings
      */
     NIX_PATH_INFO_JSON_FORMAT_V2 = 2,
