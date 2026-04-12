@@ -17,9 +17,12 @@
 
 // Captured debug state for deferred REPL execution
 // When debugger is enabled and an error occurs, we capture the environment
-// and return immediately, allowing the caller to run the REPL later.
+// and debug traces, then return immediately. This allows the caller to
+// perform cleanup (e.g., restoring terminal state from a TUI) before
+// running the REPL via nix_debugger_run_pending().
 namespace {
     std::optional<nix::ValMap> g_captured_debug_env;
+    std::optional<std::list<nix::DebugTrace>> g_captured_debug_traces;
     bool g_debug_pending = false;
 
     // Custom debugRepl that captures state and returns immediately
@@ -28,6 +31,12 @@ namespace {
         nix::ValMap const& env)
     {
         g_captured_debug_env = env;
+        // Snapshot debug traces before stack unwinding destroys them.
+        // DebugTraceStacker RAII guards pop entries from debugTraces
+        // during C++ exception unwinding, so we must copy now.
+        // Use emplace with iterator range since DebugTrace has reference
+        // members and no copy assignment operator.
+        g_captured_debug_traces.emplace(state->debugTraces.begin(), state->debugTraces.end());
         g_debug_pending = true;
         return nix::ReplExitStatus::QuitAll;
     }
@@ -151,10 +160,18 @@ nix_err nix_debugger_run_pending(
         auto env = std::move(*g_captured_debug_env);
         g_captured_debug_env.reset();
 
-        // Clear the debugRepl callback before running the REPL
-        // so errors inside the REPL show proper tracebacks instead of
-        // being captured again by debugReplCapture
-        state->state.debugRepl = nullptr;
+        // Restore debug traces that were captured before stack unwinding
+        // cleared them. This makes :bt (backtrace) work in the REPL.
+        if (g_captured_debug_traces) {
+            state->state.debugTraces = std::move(*g_captured_debug_traces);
+            g_captured_debug_traces.reset();
+        }
+
+        // Switch from the capture callback to the standard inline debugger.
+        // This keeps debugRepl non-null so debug commands (:bt, :env, etc.)
+        // remain available, while errors inside the REPL get handled
+        // interactively instead of being captured again.
+        state->state.debugRepl = &nix::AbstractNixRepl::runSimple;
 
         nix::ReplExitStatus status = nix::AbstractNixRepl::runSimple(
             nix::ref<nix::EvalState>(state->ownedState),
