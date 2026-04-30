@@ -969,7 +969,7 @@ void LocalStore::invalidatePath(State & state, const StorePath & path)
     /* Note that the foreign key constraints on the Refs table take
        care of deleting the references entries for `path'. */
 
-    pathInfoCache->lock()->erase(path);
+    invalidatePathInfoCacheFor(path);
 }
 
 const PublicKeys & LocalStore::getPublicKeys()
@@ -1037,17 +1037,18 @@ void LocalStore::addToStore(const ValidPathInfo & info, Source & source, RepairF
             auto realPath = toRealPath(info.path);
 
             /* Lock the output path.  But don't lock if we're being called
-            from a build hook (whose parent process already acquired a
-            lock on this path). */
+               from a build hook (whose parent process already acquired a
+               lock on this path). */
             if (!locksHeld.count(printStorePath(info.path)))
                 outputLock.lockPaths({realPath});
 
-            if (repair || !isValidPath(info.path)) {
+            /* The path may have been created by another process in the meantime, so check again. */
+            if (repair || !isValidPathUncached(info.path)) {
 
                 deletePath(realPath);
 
                 /* While restoring the path from the NAR, compute the hash
-                of the NAR. */
+                   of the NAR. */
                 HashSink hashSink(HashAlgorithm::SHA256);
 
                 TeeSource wrapperSource{source, hashSink};
@@ -1119,7 +1120,9 @@ void LocalStore::addToStore(const ValidPathInfo & info, Source & source, RepairF
                 }
 
                 registerValidPath(info);
-            }
+            } else
+                // We may have a negative cache entry for this path, so get rid of it.
+                invalidatePathInfoCacheFor(info.path);
 
             outputLock.setDeletion(true);
         }
@@ -1236,7 +1239,8 @@ StorePath LocalStore::addToStoreFromDump(
 
         PathLocks outputLock({realPath});
 
-        if (repair || !isValidPath(dstPath)) {
+        /* The path may have been created by another process in the meantime, so check again. */
+        if (repair || !isValidPathUncached(dstPath)) {
 
             deletePath(realPath);
 
@@ -1283,7 +1287,9 @@ StorePath LocalStore::addToStoreFromDump(
             auto info = ValidPathInfo::makeFromCA(*this, name, std::move(desc), narHash.hash);
             info.narSize = narHash.numBytesDigested;
             registerValidPath(info);
-        }
+        } else
+            // We may have a negative cache entry for this path, so get rid of it.
+            invalidatePathInfoCacheFor(dstPath);
 
         outputLock.setDeletion(true);
     }
