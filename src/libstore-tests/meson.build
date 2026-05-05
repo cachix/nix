@@ -76,6 +76,7 @@ sources = files(
   'main.cc',
   'nar-info-disk-cache.cc',
   'nar-info.cc',
+  'nix_api_realisation.cc',
   'nix_api_store.cc',
   'outputs-query.cc',
   'outputs-spec.cc',

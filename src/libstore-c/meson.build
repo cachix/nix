@@ -37,6 +37,7 @@ headers = files(
   'nix_api_store.h',
   'nix_api_store/derivation.h',
   'nix_api_store/fwd.h',
+  'nix_api_store/realisation.h',
   'nix_api_store/store_path.h',
 )
 

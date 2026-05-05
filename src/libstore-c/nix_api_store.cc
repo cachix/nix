@@ -1,7 +1,9 @@
 #include <cstring>
+#include <optional>
 #include <span>
 
 #include "nix_api_store.h"
+#include "nix_api_store/realisation.h"
 #include "nix_api_store_internal.h"
 #include "nix_api_util.h"
 #include "nix_api_util_internal.h"
@@ -14,6 +16,7 @@
 #include "nix/store/build-result.hh"
 #include "nix/store/local-fs-store.hh"
 #include "nix/util/base-nix-32.hh"
+#include "nix/util/signature/local-keys.hh"
 
 #include "nix/store/globals.hh"
 
@@ -360,15 +363,13 @@ nix_err nix_derivation_has_dynamic_inputs(
     if (context)
         context->last_err_code = NIX_OK;
     try {
-        bool has = false;
+        *out_has_dynamic = false;
         for (const auto & [_inputDrvPath, childNode] : drv->drv.inputDrvs.map) {
             if (!childNode.childMap.empty()) {
-                has = true;
+                *out_has_dynamic = true;
                 break;
             }
         }
-        if (out_has_dynamic)
-            *out_has_dynamic = has;
     }
     NIXC_CATCH_ERRS
 }
@@ -446,6 +447,90 @@ nix_err nix_store_copy_path(
         auto repairFlag = repair ? nix::RepairFlag::Repair : nix::RepairFlag::NoRepair;
         auto checkSigsFlag = checkSigs ? nix::CheckSigsFlag::CheckSigs : nix::CheckSigsFlag::NoCheckSigs;
         nix::copyStorePath(*srcStore->ptr, *dstStore->ptr, path->path, repairFlag, checkSigsFlag);
+    }
+    NIXC_CATCH_ERRS
+}
+
+} // extern "C"
+
+static std::optional<nix::DrvOutput> resolve_drv_output(Store * store, const nix::DrvOutput & drvOutput)
+{
+    if (!nix::experimentalFeatureSettings.isEnabled(nix::Xp::CaDerivations))
+        return std::nullopt;
+
+    try {
+        auto drv = store->ptr->readInvalidDerivation(drvOutput.drvPath);
+        if (!drv.outputs.contains(drvOutput.outputName) || !drv.shouldResolve())
+            return std::nullopt;
+
+        auto resolved = drv.tryResolve(*store->ptr);
+        if (!resolved)
+            return std::nullopt;
+
+        auto resolvedDrvPath = nix::computeStorePath(*store->ptr, nix::Derivation{*resolved});
+        if (resolvedDrvPath == drvOutput.drvPath)
+            return std::nullopt;
+
+        return nix::DrvOutput{std::move(resolvedDrvPath), drvOutput.outputName};
+    } catch (nix::Error &) {
+        return std::nullopt;
+    }
+}
+
+extern "C" {
+
+nix_realisation *
+nix_store_query_realisation(nix_c_context * context, Store * store, const char * drv_output_id)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        auto drvOutput = nix::DrvOutput::parse(*store->ptr, drv_output_id);
+        auto sp = store->ptr->queryRealisation(drvOutput);
+        if (!sp) {
+            if (auto resolvedDrvOutput = resolve_drv_output(store, drvOutput)) {
+                sp = store->ptr->queryRealisation(*resolvedDrvOutput);
+            }
+        }
+        if (!sp)
+            return nullptr;
+        return new nix_realisation{*sp};
+    }
+    NIXC_CATCH_ERRS_NULL
+}
+
+void nix_realisation_free(nix_realisation * r)
+{
+    delete r;
+}
+
+StorePath * nix_realisation_get_out_path(nix_c_context * context, const nix_realisation * r)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        return new StorePath{r->r.outPath};
+    }
+    NIXC_CATCH_ERRS_NULL
+}
+
+nix_err nix_realisation_get_signatures(
+    nix_c_context * context,
+    const nix_realisation * r,
+    void * userdata,
+    void (*callback)(nix_c_context * context, void * userdata, const char * signature))
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (callback) {
+            for (const auto & sig : r->r.signatures) {
+                auto s = sig.to_string();
+                callback(context, userdata, s.c_str());
+                if (context && context->last_err_code != NIX_OK)
+                    return context->last_err_code;
+            }
+        }
     }
     NIXC_CATCH_ERRS
 }
