@@ -15,6 +15,7 @@
 #include "nix_api_store/fwd.h"
 #include "nix_api_store/store_path.h"
 #include "nix_api_store/derivation.h"
+#include "nix_api_store/path_info.h"
 #include <stdbool.h>
 
 #ifdef __cplusplus
