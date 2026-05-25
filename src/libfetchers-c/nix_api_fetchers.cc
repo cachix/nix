@@ -27,4 +27,15 @@ void nix_fetchers_settings_free(nix_fetchers_settings * settings)
     delete settings;
 }
 
+nix_abstract_settings *
+nix_fetchers_settings_as_abstract_settings(nix_c_context * context, nix_fetchers_settings * settings)
+{
+    try {
+        return new nix_abstract_settings{
+            .config = &*settings->settings,
+        };
+    }
+    NIXC_CATCH_ERRS_NULL
+}
+
 } // extern "C"

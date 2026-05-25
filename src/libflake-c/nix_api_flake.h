@@ -106,6 +106,20 @@ nix_flake_settings * nix_flake_settings_new(nix_c_context * context);
 void nix_flake_settings_free(nix_flake_settings * settings);
 
 /**
+ * @brief Get a settings view for a flake settings object.
+ *
+ * Use the returned view with nix_abstract_settings_set() to override individual
+ * settings at runtime. Free the view with nix_abstract_settings_free(); this
+ * does not free @p settings, which must outlive the view.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] settings The flake settings object to view
+ * @return A settings view, or NULL on error
+ */
+nix_abstract_settings *
+nix_flake_settings_as_abstract_settings(nix_c_context * context, nix_flake_settings * settings);
+
+/**
  * @brief Initialize a `nix_flake_settings` to contain `builtins.getFlake` and
  * potentially more.
  *

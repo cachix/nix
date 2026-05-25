@@ -106,6 +106,24 @@ nix_err nix_setting_set(nix_c_context * context, const char * key, const char * 
     }
 }
 
+nix_err nix_abstract_settings_set(
+    nix_c_context * context, nix_abstract_settings * settings, const char * key, const char * value)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        if (settings->config->set(key, value))
+            return NIX_OK;
+        return nix_set_err_msg(context, NIX_ERR_KEY, "Setting not found");
+    }
+    NIXC_CATCH_ERRS
+}
+
+void nix_abstract_settings_free(nix_abstract_settings * settings)
+{
+    delete settings;
+}
+
 nix_err nix_libutil_init(nix_c_context * context)
 {
     if (context)

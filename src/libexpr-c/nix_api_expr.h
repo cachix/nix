@@ -262,6 +262,23 @@ nix_err nix_eval_state_builder_set_env_override(
     nix_c_context * context, nix_eval_state_builder * builder, const char * name, const char * value);
 
 /**
+ * @brief Get a settings view for the builder's fetcher settings.
+ *
+ * The returned view targets the `fetchers::Settings` that the built EvalState
+ * will use for fetching and flake locking. Use it with
+ * nix_abstract_settings_set() to override a setting such as "tarball-ttl"
+ * before calling nix_eval_state_build(). Free the view with
+ * nix_abstract_settings_free(); this does not free @p builder, which must
+ * outlive the view.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] builder The builder whose fetcher settings to view
+ * @return A settings view, or NULL on error
+ */
+nix_abstract_settings *
+nix_eval_state_builder_fetch_settings_as_abstract_settings(nix_c_context * context, nix_eval_state_builder * builder);
+
+/**
  * @brief Create a new Nix language evaluator state
  * @ingroup libexpr_init
  *
