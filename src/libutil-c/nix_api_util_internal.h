@@ -5,6 +5,7 @@
 #include <optional>
 
 #include "nix/util/error.hh"
+#include "nix/util/configuration.hh"
 #include "nix_api_util.h"
 
 extern "C" {
@@ -16,6 +17,17 @@ struct nix_c_context
     std::optional<std::string> last_err = {};
     std::optional<nix::ErrorInfo> info = {};
     std::string name = "";
+};
+
+/**
+ * A non-owning view of a configuration object.
+ *
+ * Produced by upcasts such as nix_fetchers_settings_as_abstract_settings(); the
+ * pointed-at config is owned elsewhere and must outlive this view.
+ */
+struct nix_abstract_settings
+{
+    nix::AbstractConfig * config;
 };
 
 nix_err nix_context_error(nix_c_context * context);
