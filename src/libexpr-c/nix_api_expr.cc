@@ -205,6 +205,19 @@ nix_err nix_eval_state_builder_set_env_override(
     NIXC_CATCH_ERRS
 }
 
+nix_abstract_settings *
+nix_eval_state_builder_fetch_settings_as_abstract_settings(nix_c_context * context, nix_eval_state_builder * builder)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        return new nix_abstract_settings{
+            .config = &builder->fetchSettings,
+        };
+    }
+    NIXC_CATCH_ERRS_NULL
+}
+
 EvalState * nix_eval_state_build(nix_c_context * context, nix_eval_state_builder * builder)
 {
     if (context)
