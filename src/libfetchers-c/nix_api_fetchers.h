@@ -40,6 +40,21 @@ nix_fetchers_settings * nix_fetchers_settings_new(nix_c_context * context);
 
 void nix_fetchers_settings_free(nix_fetchers_settings * settings);
 
+/**
+ * @brief Get a settings view for a fetchers settings object.
+ *
+ * Use the returned view with nix_abstract_settings_set() to override individual
+ * settings (for example "tarball-ttl") at runtime. Free the view with
+ * nix_abstract_settings_free(); this does not free @p settings, which must
+ * outlive the view.
+ *
+ * @param[out] context Optional, stores error information
+ * @param[in] settings The fetchers settings object to view
+ * @return A settings view, or NULL on error
+ */
+nix_abstract_settings *
+nix_fetchers_settings_as_abstract_settings(nix_c_context * context, nix_fetchers_settings * settings);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

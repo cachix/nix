@@ -28,6 +28,18 @@ void nix_flake_settings_free(nix_flake_settings * settings)
     delete settings;
 }
 
+nix_abstract_settings *
+nix_flake_settings_as_abstract_settings(nix_c_context * context, nix_flake_settings * settings)
+{
+    nix_clear_err(context);
+    try {
+        return new nix_abstract_settings{
+            .config = &*settings->settings,
+        };
+    }
+    NIXC_CATCH_ERRS_NULL
+}
+
 nix_err nix_flake_settings_add_to_eval_state_builder(
     nix_c_context * context, nix_flake_settings * settings, nix_eval_state_builder * builder)
 {

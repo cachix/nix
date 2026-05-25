@@ -224,6 +224,21 @@ nix_err nix_init_signal_handler(nix_c_context * context);
 /** @defgroup settings Nix configuration settings
  *  @{
  */
+
+/**
+ * @brief A non-owning view of a configuration object that accepts settings.
+ *
+ * Unlike nix_setting_set(), which only targets the global configuration, this
+ * lets you set individual settings on a specific settings object (for example
+ * the one returned by nix_fetchers_settings_new() or nix_flake_settings_new()).
+ *
+ * Obtain one with an upcast such as nix_fetchers_settings_as_abstract_settings().
+ * The view does not own the underlying settings object; freeing the view with
+ * nix_abstract_settings_free() does not affect the settings it points at, and
+ * the view must not outlive that object.
+ */
+typedef struct nix_abstract_settings nix_abstract_settings;
+
 /**
  * @brief Retrieves a setting from the nix global configuration.
  *
@@ -255,6 +270,32 @@ nix_err nix_setting_get(nix_c_context * context, const char * key, nix_get_strin
  * set successfully.
  */
 nix_err nix_setting_set(nix_c_context * context, const char * key, const char * value);
+
+/**
+ * @brief Sets an individual setting on a specific settings object.
+ *
+ * Use "extra-<setting name>" to append to the setting's value.
+ *
+ * @param[out] context optional, Stores error information
+ * @param[in] settings The settings view to modify, e.g. from
+ * nix_fetchers_settings_as_abstract_settings().
+ * @param[in] key The key of the setting to set.
+ * @param[in] value The value to set for the setting.
+ * @return NIX_ERR_KEY if the setting is unknown to this object, or NIX_OK if the
+ * setting was set successfully.
+ */
+nix_err nix_abstract_settings_set(
+    nix_c_context * context, nix_abstract_settings * settings, const char * key, const char * value);
+
+/**
+ * @brief Frees a settings view obtained from an upcast.
+ *
+ * This only frees the lightweight view; the underlying settings object is
+ * unaffected.
+ *
+ * @param[in] settings The settings view to free.
+ */
+void nix_abstract_settings_free(nix_abstract_settings * settings);
 
 /**
  *  @}
