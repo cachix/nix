@@ -2579,7 +2579,21 @@ StorePath EvalState::copyPathToStore(NixStringContext & context, const SourcePat
             repair);
         allowPath(dstPath);
         srcToStore->try_emplace(path, dstPath);
-        printMsg(lvlChatty, "copied source '%1%' -> '%2%'", path, store->printStorePath(dstPath));
+        // devenv: announce the source -> store mapping as a structured activity
+        // (actEvalCopySource) carrying the source and destination paths as
+        // fields. This lets log consumers such as devenv's eval-cache dependency
+        // tracker observe sources copied into the store during evaluation (path
+        // coercion, e.g. `"${./file}"` or `src = ./.`) from the JSON activity
+        // stream, which is emitted regardless of verbosity, instead of scraping a
+        // free-text log line that only appears at lvlChatty. The activity text
+        // preserves the previous human-readable "copied source" line for -vv.
+        auto dstPathS = store->printStorePath(dstPath);
+        Activity(
+            *logger,
+            lvlChatty,
+            actEvalCopySource,
+            fmt("copied source '%1%' -> '%2%'", path, dstPathS),
+            {path.path.abs(), dstPathS});
         return dstPath;
     }();
 
