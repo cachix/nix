@@ -35,6 +35,8 @@ const char * CallbackLogger::activityTypeToString(ActivityType type)
         return "build-waiting";
     case actFetchTree:
         return "fetch-tree";
+    case actEvalCopySource:
+        return "eval-copy-source";
     default:
         return "unknown";
     }
