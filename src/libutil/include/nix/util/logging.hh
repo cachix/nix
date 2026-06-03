@@ -28,6 +28,12 @@ typedef enum {
     actPostBuildHook = 110,
     actBuildWaiting = 111,
     actFetchTree = 112,
+    /* devenv: a local source path was copied into the store during evaluation
+       (path coercion, e.g. `"${./file}"` or `src = ./.`). Fields: [0] = source
+       path, [1] = destination store path. Emitted as a structured activity so
+       log consumers can track eval-time source dependencies without scraping
+       free-text log lines or depending on a particular verbosity level. */
+    actEvalCopySource = 113,
 } ActivityType;
 
 typedef enum {

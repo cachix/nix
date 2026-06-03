@@ -2612,6 +2612,13 @@ StorePath EvalState::copyPathToStore(NixStringContext & context, const SourcePat
         nullptr,
         repair);
     allowPath(dstPath);
+    auto dstPathS = store->printStorePath(dstPath);
+    Activity(
+        *logger,
+        lvlChatty,
+        actEvalCopySource,
+        fmt("copied source '%1%' -> '%2%'", path, dstPathS),
+        {path.path.abs(), dstPathS});
 
     context.insert(NixStringContextElem::Opaque{.path = dstPath});
     return dstPath;
