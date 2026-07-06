@@ -1067,7 +1067,7 @@ void callFlake(EvalState & state, const LockedFlake & lockedFlake, Value & vRes)
     auto vFetchFinalTree = get(state.internalPrimOps, "fetchFinalTree");
     assert(vFetchFinalTree);
 
-    Value * args[] = {vLocks, &vOverrides, *vFetchFinalTree};
+    Value * args[] = {vLocks, &vOverrides, **vFetchFinalTree};
     state.callFunction(*vCallFlake, args, vRes, noPos);
 }
 
