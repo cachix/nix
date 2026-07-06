@@ -9,6 +9,7 @@
 #include <memory_resource>
 #include <exception>
 #include <span>
+#include <utility>
 #include <string_view>
 #include <type_traits>
 #include <concepts>
@@ -1625,13 +1626,6 @@ typedef boost::unordered_flat_map<
     ValueMap;
 typedef std::map<Symbol, ValueVector, std::less<Symbol>, traceable_allocator<std::pair<const Symbol, ValueVector>>>
     ValueVectorMap;
-
-/**
- * A value allocated in traceable memory.
- */
-typedef std::shared_ptr<Value *> RootValue;
-
-RootValue allocRootValue(Value * v);
 
 /**
  * Throws the error for a string that contains null bytes. If @p positions is
