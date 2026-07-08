@@ -790,9 +790,9 @@ struct CompareValues
 
 static void prim_genericClosure(EvalState & state, CallSite callSite, Value * const * args, Value & v)
 {
-    /* The values are rooted via UniqueRootValue, so the lists themselves
+    /* The values are rooted via RootValue, so the lists themselves
        don't need to be visible to the GC. */
-    using ValueList = std::list<UniqueRootValue>;
+    using ValueList = std::list<RootValue>;
 
     state.forceAttrs(*args[0], noPos, "while evaluating the first argument passed to builtins.genericClosure");
 
@@ -807,7 +807,7 @@ static void prim_genericClosure(EvalState & state, CallSite callSite, Value * co
 
     ValueList workSet;
     for (auto elem : startSet->value->listView())
-        workSet.push_back(UniqueRootValue(elem));
+        workSet.push_back(RootValue(elem));
 
     if (startSet->value->listSize() == 0) {
         v = *startSet->value;
@@ -873,7 +873,7 @@ static void prim_genericClosure(EvalState & state, CallSite callSite, Value * co
             }
             throw;
         }
-        res.push_back(UniqueRootValue(e));
+        res.push_back(RootValue(e));
 
         /* Call the `operator' function with `e' as argument. */
         Value newElements;
@@ -888,7 +888,7 @@ static void prim_genericClosure(EvalState & state, CallSite callSite, Value * co
             for (auto elem : newElements.listView()) {
                 state.forceValue(*elem, noPos); // "while evaluating one one of the elements returned by the `operator`
                                                 // passed to builtins.genericClosure");
-                workSet.push_back(UniqueRootValue(elem));
+                workSet.push_back(RootValue(elem));
             }
         } catch (Error & err) {
             err.addTrace(
