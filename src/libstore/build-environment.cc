@@ -212,27 +212,24 @@ std::pair<StorePath, BuildEnvironment> BuildEnvironment::getDevEnvironment(ref<S
     drv.env.emplace("name", drv.name);
     drv.inputSrcs.insert(std::move(getEnvShPath));
 
-    if (experimentalFeatureSettings.isEnabled(Xp::CaDerivations)) {
-        for (auto & output : drv.outputs) {
-            output.second = DerivationOutput::Deferred{};
-            drv.env[output.first] = hashPlaceholder(output.first);
-        }
-    } else {
-        for (auto & output : drv.outputs) {
-            output.second = DerivationOutput::Deferred{};
-            drv.env[output.first] = "";
-        }
-        auto hashesModulo = hashDerivationModulo(*store, drv, true);
-
-        for (auto & output : drv.outputs) {
-            Hash h = hashesModulo.hashes.at(output.first);
-            auto outPath = store->makeOutputPath(output.first, h, drv.name);
-            output.second = DerivationOutput::InputAddressed{
-                .path = outPath,
-            };
-            drv.env[output.first] = store->printStorePath(outPath);
-        }
+    for (auto & [outputName, output] : drv.outputs) {
+        std::visit(
+            overloaded{
+                [&](const DerivationOutput::InputAddressed &) {
+                    output = DerivationOutput::Deferred{};
+                    drv.env[outputName] = "";
+                },
+                [&](const DerivationOutput::CAFixed &) {
+                    output = DerivationOutput::Deferred{};
+                    drv.env[outputName] = "";
+                },
+                [&](const auto &) {
+                    // Preserve content-addressed and deferred output types.
+                },
+            },
+            output.raw);
     }
+    drv.fillInOutputPaths(*store);
 
     auto shellDrvPath = store->writeDerivation(drv);
 
