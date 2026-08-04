@@ -11,7 +11,6 @@
 
 #include <boost/coroutine2/coroutine.hpp>
 #include <boost/coroutine2/protected_fixedsize_stack.hpp>
-#include <boost/context/stack_traits.hpp>
 
 #ifdef _WIN32
 #  include <fileapi.h>
@@ -306,6 +305,13 @@ CompressedSource::CompressedSource(RestartableSource & source, CompressionAlgo c
 {
 }
 
+/* 512KiB is a conservative estimate for deeply nested NARs, which are limited
+   to 64 levels. We also tend to allocate rather large buffers on the stack, so
+   we should leave plenty of headroom. Note that no evaluation is supposed to
+   happen on sourceToSink/sinkToSource coroutine stacks (for Boehm GC reasons),
+   which requires much more stack space. */
+static constexpr size_t defaultCoroutineStackSize = 512 * 1024;
+
 std::unique_ptr<FinishSink> sourceToSink(fun<void(Source &)> reader)
 {
     struct SourceToSink : FinishSink
@@ -329,26 +335,22 @@ std::unique_ptr<FinishSink> sourceToSink(fun<void(Source &)> reader)
             cur = in;
 
             if (!coro) {
-                // Use 1 MiB instead of Boost's default 128KB.
-                std::size_t stack_size = std::max<std::size_t>(
-                    1024 * 1024, // 1 MiB
-                    boost::context::stack_traits::minimum_size());
                 coro = coro_t::push_type(
-                    boost::coroutines2::protected_fixedsize_stack(stack_size),
+                    boost::coroutines2::protected_fixedsize_stack(defaultCoroutineStackSize),
                     [&](coro_t::pull_type & yield) {
-                    LambdaSource source([&](char * out, size_t out_len) {
-                        if (cur.empty()) {
-                            yield();
-                            if (yield.get())
-                                throw EndOfFile("coroutine has finished");
-                        }
+                        LambdaSource source([&](char * out, size_t out_len) {
+                            if (cur.empty()) {
+                                yield();
+                                if (yield.get())
+                                    throw EndOfFile("coroutine has finished");
+                            }
 
-                        size_t n = cur.copy(out, out_len);
-                        cur.remove_prefix(n);
-                        return n;
+                            size_t n = cur.copy(out, out_len);
+                            cur.remove_prefix(n);
+                            return n;
+                        });
+                        reader(source);
                     });
-                    reader(source);
-                });
             }
 
             if (!*coro) {
@@ -392,20 +394,16 @@ std::unique_ptr<Source> sinkToSource(fun<void(Sink &)> writer, fun<void()> eof)
         {
             bool hasCoro = coro.has_value();
             if (!hasCoro) {
-                // Use 1 MiB instead of Boost's default 128KB.
-                std::size_t stack_size = std::max<std::size_t>(
-                    1024 * 1024, // 1 MiB
-                    boost::context::stack_traits::minimum_size());
                 coro = coro_t::pull_type(
-                    boost::coroutines2::protected_fixedsize_stack(stack_size),
+                    boost::coroutines2::protected_fixedsize_stack(defaultCoroutineStackSize),
                     [&](coro_t::push_type & yield) {
-                    LambdaSink sink([&](std::string_view data) {
-                        if (!data.empty()) {
-                            yield(data);
-                        }
+                        LambdaSink sink([&](std::string_view data) {
+                            if (!data.empty()) {
+                                yield(data);
+                            }
+                        });
+                        writer(sink);
                     });
-                    writer(sink);
-                });
             }
 
             if (cur.empty()) {
