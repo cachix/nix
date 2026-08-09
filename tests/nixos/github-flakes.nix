@@ -64,12 +64,21 @@ let
           local len=$(( ''${#content} + 4 ))
           printf '%04x%s' "$len" "$content"
         }
+        pkt_line_with_capabilities() {
+          local oid="$1"
+          local ref="$2"
+          local capabilities="$3"
+          local len=$(( ''${#oid} + ''${#ref} + ''${#capabilities} + 7 ))
+          printf '%04x%s %s\0%s\n' "$len" "$oid" "$ref" "$capabilities"
+        }
         {
           pkt_line "# service=git-upload-pack
     "
           printf '0000'
-          pkt_line "${private-flake-rev} HEAD
-    "
+          pkt_line_with_capabilities \
+            "${private-flake-rev}" \
+            HEAD \
+            "symref=HEAD:refs/heads/master"
           pkt_line "${private-flake-rev} refs/heads/master
     "
           printf '0000'
@@ -91,12 +100,21 @@ let
           local len=$(( ''${#content} + 4 ))
           printf '%04x%s' "$len" "$content"
         }
+        pkt_line_with_capabilities() {
+          local oid="$1"
+          local ref="$2"
+          local capabilities="$3"
+          local len=$(( ''${#oid} + ''${#ref} + ''${#capabilities} + 7 ))
+          printf '%04x%s %s\0%s\n' "$len" "$oid" "$ref" "$capabilities"
+        }
         {
           pkt_line "# service=git-upload-pack
     "
           printf '0000'
-          pkt_line "${nixpkgs.rev} HEAD
-    "
+          pkt_line_with_capabilities \
+            "${nixpkgs.rev}" \
+            HEAD \
+            "symref=HEAD:refs/heads/master"
           pkt_line "${nixpkgs.rev} refs/heads/master
     "
           printf '0000'
@@ -231,6 +249,14 @@ in
       assert "github:NixOS/nixpkgs" in out, "nixpkgs flake not found"
       assert "github:fancy-enterprise/private-flake" in out, "private flake not found"
       cat_log()
+
+      # GitHub ref resolution uses smart HTTP directly. A user's Git URL rewrite
+      # must not unexpectedly switch this internal request to SSH.
+      client.succeed("mkdir -p /root/.config/git")
+      client.succeed(
+          "printf '%s\\n' '[url \"ssh://git@github.com/\"]' "
+          "'    insteadOf = https://github.com/' > /root/.config/git/config"
+      )
 
       # If no github access token is provided, nix should use the public archive url...
       out = client.succeed("nix flake metadata nixpkgs --json")

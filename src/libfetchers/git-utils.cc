@@ -1547,7 +1547,9 @@ Hash resolveRemoteRef(const std::string & url, const std::string & ref, const He
     initLibGit2();
 
     Remote remote;
-    if (git_remote_create_detached(Setter(remote), url.c_str()))
+    git_remote_create_options opts = GIT_REMOTE_CREATE_OPTIONS_INIT;
+    opts.flags = GIT_REMOTE_CREATE_SKIP_INSTEADOF;
+    if (git_remote_create_with_opts(Setter(remote), url.c_str(), &opts))
         throw Error("creating detached remote for '%s': %s", url, git_error_last()->message);
 
     // Extract raw token from Authorization header for credential callback.
@@ -1569,20 +1571,17 @@ Hash resolveRemoteRef(const std::string & url, const std::string & ref, const He
 
     git_remote_callbacks callbacks = GIT_REMOTE_CALLBACKS_INIT;
     callbacks.payload = &token;
-    callbacks.credentials =
-        [](git_credential ** out,
-           const char *,
-           const char * username_from_url,
-           unsigned int allowed_types,
-           void * payload) -> int {
+    callbacks.credentials = [](git_credential ** out,
+                               const char *,
+                               const char * username_from_url,
+                               unsigned int allowed_types,
+                               void * payload) -> int {
         auto * tok = static_cast<std::string *>(payload);
         /* HTTPS: authenticate with the access token via basic auth. */
         if (!tok->empty() && (allowed_types & GIT_CREDENTIAL_USERPASS_PLAINTEXT))
             return git_credential_userpass_plaintext_new(out, "x-access-token", tok->c_str());
-        /* SSH: a `url.<base>.insteadOf` rewrite can turn the HTTPS URL into an
-           SSH one (e.g. ssh://git@github.com/). Authenticate via the user's
-           ssh-agent, the same way git/ssh would, instead of failing with
-           "authentication required but no callback set" (#2842). */
+        /* SSH: support callers that provide an explicit SSH URL. Git config
+           rewrites are disabled when creating the remote above. */
         const char * username = username_from_url ? username_from_url : "git";
         if (allowed_types & GIT_CREDENTIAL_SSH_KEY)
             return git_credential_ssh_key_from_agent(out, username);
