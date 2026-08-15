@@ -136,8 +136,9 @@ void overrideRegistry(const Input & from, const Input & to, const Attrs & extraA
     getFlagRegistry()->add(from, to, extraAttrs);
 }
 
-static std::shared_ptr<Registry> getGlobalRegistry(const Settings & settings, Store & store)
+static std::shared_ptr<Registry> getGlobalRegistry(const FetchContext & context, Store & store)
 {
+    auto & settings = context.settings;
     static auto reg = [&]() {
         auto path = settings.flakeRegistry.get();
         if (path == "") {
@@ -149,7 +150,7 @@ static std::shared_ptr<Registry> getGlobalRegistry(const Settings & settings, St
             [&] -> SourcePath {
                 std::filesystem::path fsPath{path};
                 if (!fsPath.is_absolute()) {
-                    auto storePath = downloadFile(store, settings, path, "flake-registry.json").storePath;
+                    auto storePath = downloadFile(store, context, path, "flake-registry.json").storePath;
                     if (auto store2 = dynamic_cast<LocalFSStore *>(&store))
                         store2->addPermRoot(storePath, (getCacheDir() / "flake-registry.json").string());
                     return {store.requireStoreObjectAccessor(storePath)};
@@ -163,18 +164,19 @@ static std::shared_ptr<Registry> getGlobalRegistry(const Settings & settings, St
     return reg;
 }
 
-Registries getRegistries(const Settings & settings, Store & store)
+Registries getRegistries(const FetchContext & context, Store & store)
 {
+    auto & settings = context.settings;
     Registries registries;
     registries.push_back(getFlagRegistry());
     registries.push_back(getUserRegistry(settings));
     registries.push_back(getSystemRegistry(settings));
-    registries.push_back(getGlobalRegistry(settings, store));
+    registries.push_back(getGlobalRegistry(context, store));
     return registries;
 }
 
 std::pair<Input, Attrs>
-lookupInRegistries(const Settings & settings, Store & store, const Input & _input, UseRegistries useRegistries)
+lookupInRegistries(const FetchContext & context, Store & store, const Input & _input, UseRegistries useRegistries)
 {
     Attrs extraAttrs;
     int n = 0;
@@ -189,7 +191,7 @@ restart:
     if (n > 100)
         throw Error("cycle detected in flake registry for '%s'", input.to_string());
 
-    for (auto & registry : getRegistries(settings, store)) {
+    for (auto & registry : getRegistries(context, store)) {
         if (useRegistries == UseRegistries::Limited
             && !(registry->type == fetchers::Registry::Flag || registry->type == fetchers::Registry::Global))
             continue;
