@@ -223,23 +223,27 @@ std::pair<nlohmann::json, LockFile::KeyMap> LockFile::toJSON() const
 
         if (auto lockedNode = node.dynamic_pointer_cast<const LockedNode>()) {
             n["original"] = fetchers::attrsToJSON(lockedNode->originalRef.toAttrs());
-            n["locked"] = fetchers::attrsToJSON(lockedNode->lockedRef.toAttrs());
+            auto lockedAttrs = lockedNode->lockedRef.toAttrs();
             /* For backward compatibility, omit the "__final"
                attribute. We never allow non-final inputs in lock files
                anyway. */
-            assert(lockedNode->lockedRef.input.isFinal() || lockedNode->lockedRef.input.isRelative()
-                   || lockedNode->lockedRef.input.isLocal());
-            n["locked"].erase("__final");
+            assert(
+                lockedNode->lockedRef.input.isFinal() || lockedNode->lockedRef.input.isRelative()
+                || lockedNode->lockedRef.input.isLocal());
+            lockedAttrs.erase("__final");
             /* Strip volatile attributes from local inputs to avoid
-               lock file churn. Local inputs are always fetched fresh. */
+               lock file churn. Local inputs are always fetched fresh.
+               Do this before serialisation so lazy volatile attributes
+               are not needlessly forced. */
             if (lockedNode->lockedRef.input.isLocal()) {
-                n["locked"].erase("narHash");
-                n["locked"].erase("lastModified");
-                n["locked"].erase("rev");
-                n["locked"].erase("revCount");
-                n["locked"].erase("dirtyRev");
-                n["locked"].erase("dirtyShortRev");
+                lockedAttrs.erase("narHash");
+                lockedAttrs.erase("lastModified");
+                lockedAttrs.erase("rev");
+                lockedAttrs.erase("revCount");
+                lockedAttrs.erase("dirtyRev");
+                lockedAttrs.erase("dirtyShortRev");
             }
+            n["locked"] = fetchers::attrsToJSON(lockedAttrs);
             if (!lockedNode->isFlake)
                 n["flake"] = false;
             if (lockedNode->parentInputAttrPath)
