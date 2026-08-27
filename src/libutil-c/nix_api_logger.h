@@ -95,14 +95,29 @@ typedef void (*nix_activity_result_cb)(
 /**
  * @brief Called when Nix emits a log message.
  *
- * This captures general log messages from Nix, including "evaluating file '...'"
- * messages during evaluation.
+ * This captures general unstructured log messages from Nix. Evaluator
+ * dependencies are delivered through nix_eval_effect_cb instead.
  *
  * @param[in] level Verbosity level (0=Error, 1=Warn, 2=Notice, 3=Info, 4=Talkative, 5=Chatty, 6=Debug, 7=Vomit)
  * @param[in] msg The log message
  * @param[in] user_data Arbitrary user data passed to nix_set_logger_callbacks
  */
 typedef void (*nix_log_cb)(int level, const char * msg, void * user_data);
+
+/**
+ * @brief Called once for an evaluator dependency.
+ *
+ * The string views are valid only for the duration of the callback. A NULL
+ * detail pointer indicates that the effect has no detail value.
+ */
+typedef void (*nix_eval_effect_cb)(
+    const char * kind,
+    size_t kind_len,
+    const char * subject,
+    size_t subject_len,
+    const char * detail,
+    size_t detail_len,
+    void * user_data);
 
 /**
  * @brief Register callbacks to observe Nix activities.
@@ -161,6 +176,14 @@ nix_err nix_set_logger_callbacks(
     nix_activity_result_cb on_result,
     nix_log_cb on_log,
     void * user_data);
+
+/**
+ * @brief Register the callback for one-shot evaluator dependency events.
+ *
+ * This must be called after nix_set_logger_callbacks. The callback remains
+ * installed until the callback logger is replaced or reset.
+ */
+nix_err nix_set_eval_effect_callback(nix_c_context * context, nix_eval_effect_cb on_eval_effect, void * user_data);
 
 /**
  * @brief Reset the logger to the default SimpleLogger.

@@ -30,6 +30,8 @@ private:
     nix_activity_result_cb on_result;
     nix_log_cb on_log;
     void * user_data;
+    nix_eval_effect_cb on_eval_effect = nullptr;
+    void * eval_effect_user_data = nullptr;
 
     /**
      * Convert ActivityType enum to string for callbacks
@@ -65,6 +67,14 @@ public:
     void stopActivity(ActivityId act) override;
 
     void result(ActivityId act, ResultType type, const Fields & fields) override;
+
+    void setEvalEffectCallback(nix_eval_effect_cb callback, void * callbackUserData)
+    {
+        on_eval_effect = callback;
+        eval_effect_user_data = callbackUserData;
+    }
+
+    void evalEffect(std::string_view kind, std::string_view subject, std::optional<std::string_view> detail) override;
 
     void log(Verbosity lvl, std::string_view s) override
     {
