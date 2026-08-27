@@ -20,6 +20,8 @@
 #include "nix/fetchers/fetch-to-store.hh"
 #include "nix/util/sort.hh"
 
+#include "eval-effect.hh"
+
 #include <boost/container/small_vector.hpp>
 #include <boost/unordered/concurrent_flat_map.hpp>
 #include <boost/unordered/unordered_flat_map.hpp>
@@ -281,8 +283,9 @@ static void scopedImport(EvalState & state, const PosIdx pos, SourcePath & path,
     // No need to call staticEnv.sort(), because
     // args[0]->attrs is already sorted.
 
-    printTalkative("evaluating file '%1%'", path);
-    Expr * e = state.parseExprFromFile(resolveExprPath(path), staticEnv);
+    auto resolvedPath = resolveExprPath(path);
+    evalEffect(EvalEffect::EvaluatedFile, resolvedPath.to_string(), "uncached");
+    Expr * e = state.parseExprFromFile(resolvedPath, staticEnv);
 
     e->eval(state, *env, v);
 }
@@ -1246,7 +1249,7 @@ static void prim_getEnv(EvalState & state, const PosIdx pos, Value ** args, Valu
 {
     std::string name(
         state.forceStringNoCtx(*args[0], pos, "while evaluating the first argument passed to builtins.getEnv"));
-    printTalkative("devenv getEnv: '%1%'", name);
+    evalEffect(EvalEffect::GetEnv, name);
 
     // Check overrides first (works even in pure-eval mode)
     auto it = state.settings.envOverrides.find(name);
@@ -2020,7 +2023,7 @@ static void prim_pathExists(EvalState & state, const PosIdx pos, Value ** args, 
         auto symlinkResolution = mustBeDir ? SymlinkResolution::Full : SymlinkResolution::Ancestors;
         auto path = state.realisePath(pos, arg, symlinkResolution);
 
-        printTalkative("devenv pathExists: '%1%'", path);
+        evalEffect(EvalEffect::PathExists, path.to_string());
 
         auto st = path.maybeLstat();
         auto exists = st && (!mustBeDir || st->type == SourceAccessor::tDirectory);
@@ -2128,7 +2131,7 @@ static RegisterPrimOp primop_dirOf({
 static void prim_readFile(EvalState & state, const PosIdx pos, Value ** args, Value & v)
 {
     auto path = state.realisePath(pos, *args[0]);
-    printTalkative("devenv readFile: '%1%'", path);
+    evalEffect(EvalEffect::ReadFile, path.to_string());
     auto s = path.readFile();
     if (s.find((char) 0) != std::string::npos)
         state.error<EvalError>("the contents of the file '%1%' cannot be represented as a Nix string", path)
@@ -2364,7 +2367,7 @@ static void prim_hashFile(EvalState & state, const PosIdx pos, Value ** args, Va
         state.error<EvalError>("unknown hash algorithm '%1%'", algo).atPos(pos).debugThrow();
 
     auto path = state.realisePath(pos, *args[1]);
-    printTalkative("devenv hashFile: '%1%'", path);
+    evalEffect(EvalEffect::HashFile, path.to_string(), algo);
 
     v.mkString(hashString(*ha, path.readFile()).to_string(HashFormat::Base16, false), state.mem);
 }
@@ -2417,7 +2420,7 @@ static const Value & fileTypeToString(EvalState & state, SourceAccessor::Type ty
 static void prim_readFileType(EvalState & state, const PosIdx pos, Value ** args, Value & v)
 {
     auto path = state.realisePath(pos, *args[0], std::nullopt);
-    printTalkative("devenv readFileType: '%1%'", path);
+    evalEffect(EvalEffect::ReadFileType, path.to_string());
     /* Retrieve the directory entry type and stringize it. */
     v = fileTypeToString(state, path.lstat().type);
 }
@@ -2436,7 +2439,7 @@ static RegisterPrimOp primop_readFileType({
 static void prim_readDir(EvalState & state, const PosIdx pos, Value ** args, Value & v)
 {
     auto path = state.realisePath(pos, *args[0]);
-    printTalkative("devenv readDir: '%1%'", path);
+    evalEffect(EvalEffect::ReadDir, path.to_string());
 
     // Retrieve directory entries for all nodes in a directory.
     // This is similar to `getFileType` but is optimized to reduce system calls
@@ -2860,6 +2863,13 @@ static void addPath(
     Value & v,
     const NixStringContext & context)
 {
+    auto sourcePath = path.to_string();
+    auto reportCopy = [&](const StorePath & destination) {
+        evalEffect(
+            filterFun ? EvalEffect::FilterSource : EvalEffect::CopySource,
+            sourcePath,
+            state.store->printStorePath(destination));
+    };
     try {
         StorePathSet refs;
 
@@ -2911,8 +2921,11 @@ static void addPath(
                     .atPos(pos)
                     .debugThrow();
             state.allowAndSetStorePathString(dstPath, v);
-        } else
+            reportCopy(dstPath);
+        } else {
             state.allowAndSetStorePathString(*expectedStorePath, v);
+            reportCopy(*expectedStorePath);
+        }
     } catch (Error & e) {
         e.addTrace(state.positions[pos], "while adding path '%s'", path);
         throw;
@@ -2927,7 +2940,6 @@ static void prim_filterSource(EvalState & state, const PosIdx pos, Value ** args
         *args[1],
         context,
         "while evaluating the second argument (the path to filter) passed to 'builtins.filterSource'");
-    printTalkative("devenv filterSource: '%1%'", path);
     state.forceFunction(*args[0], pos, "while evaluating the first argument passed to builtins.filterSource");
 
     addPath(
@@ -3032,8 +3044,6 @@ static void prim_path(EvalState & state, const PosIdx pos, Value ** args, Value 
             .debugThrow();
     if (name.empty())
         name = path->baseName();
-
-    printTalkative("devenv path: '%1%'", *path);
 
     addPath(state, pos, name, *path, filterFun, method, expectedHash, v, context);
 }

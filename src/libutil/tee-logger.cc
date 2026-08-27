@@ -68,6 +68,12 @@ public:
             logger->result(act, type, fields);
     }
 
+    void evalEffect(std::string_view kind, std::string_view subject, std::optional<std::string_view> detail) override
+    {
+        for (auto & logger : loggers)
+            logger->evalEffect(kind, subject, detail);
+    }
+
     void writeToStdout(std::string_view s) override
     {
         for (auto & logger : loggers) {
