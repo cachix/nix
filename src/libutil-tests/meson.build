@@ -64,6 +64,7 @@ sources = files(
   'memory-source-accessor.cc',
   'monitorfdhup.cc',
   'nar-listing.cc',
+  'nix_api_logger.cc',
   'nix_api_util.cc',
   'nix_api_util_internal.cc',
   'os-canon-path.cc',

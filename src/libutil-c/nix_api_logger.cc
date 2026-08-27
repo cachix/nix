@@ -102,8 +102,10 @@ void CallbackLogger::startActivity(
         // Build arrays of field data (same pattern as result())
         std::vector<int> field_types;
         std::vector<int64_t> int_values;
-        std::vector<std::string> string_storage;
         std::vector<const char *> string_values;
+        field_types.reserve(field_count);
+        int_values.reserve(field_count);
+        string_values.reserve(field_count);
 
         for (const auto & field : fields) {
             if (auto * i = std::get_if<uint64_t>(&field)) {
@@ -113,8 +115,7 @@ void CallbackLogger::startActivity(
             } else if (auto * str = std::get_if<std::string>(&field)) {
                 field_types.push_back(1);
                 int_values.push_back(0);
-                string_storage.push_back(*str);
-                string_values.push_back(string_storage.back().c_str());
+                string_values.push_back(str->c_str());
             }
         }
 
@@ -156,8 +157,10 @@ void CallbackLogger::result(ActivityId act, ResultType type, std::span<const Fie
         // Build arrays of field data
         std::vector<int> field_types;
         std::vector<int64_t> int_values;
-        std::vector<std::string> string_storage;
         std::vector<const char *> string_values;
+        field_types.reserve(field_count);
+        int_values.reserve(field_count);
+        string_values.reserve(field_count);
 
         for (const auto & field : fields) {
             if (auto * i = std::get_if<uint64_t>(&field)) {
@@ -167,20 +170,33 @@ void CallbackLogger::result(ActivityId act, ResultType type, std::span<const Fie
             } else if (auto * str = std::get_if<std::string>(&field)) {
                 field_types.push_back(1);
                 int_values.push_back(0);
-                string_storage.push_back(*str);
-                string_values.push_back(string_storage.back().c_str());
+                string_values.push_back(str->c_str());
             }
         }
 
         // Call the callback with raw data
         on_result(
-            act,
-            result_type_str,
-            field_count,
-            field_types.data(),
-            int_values.data(),
-            string_values.data(),
-            user_data);
+            act, result_type_str, field_count, field_types.data(), int_values.data(), string_values.data(), user_data);
+    } catch (...) {
+        // Silently ignore callback errors to avoid crashing Nix
+    }
+}
+
+void CallbackLogger::evalEffect(
+    std::string_view kind, std::string_view subject, std::optional<std::string_view> detail) noexcept
+{
+    if (!on_eval_effect)
+        return;
+
+    try {
+        on_eval_effect(
+            kind.data(),
+            kind.size(),
+            subject.data(),
+            subject.size(),
+            detail ? detail->data() : nullptr,
+            detail ? detail->size() : 0,
+            eval_effect_user_data);
     } catch (...) {
         // Silently ignore callback errors to avoid crashing Nix
     }
@@ -202,12 +218,25 @@ nix_err nix_set_logger_callbacks(
         context->last_err_code = NIX_OK;
     try {
         // Create the callback logger
-        auto callback_logger = std::make_unique<nix::CallbackLogger>(
-            on_start, on_stop, on_result, on_log, user_data);
+        auto callback_logger = std::make_unique<nix::CallbackLogger>(on_start, on_stop, on_result, on_log, user_data);
 
         // Replace the global logger
         nix::logger = callback_logger.release();
 
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
+nix_err nix_set_eval_effect_callback(nix_c_context * context, nix_eval_effect_cb on_eval_effect, void * user_data)
+{
+    if (context)
+        context->last_err_code = NIX_OK;
+    try {
+        auto * callback_logger = dynamic_cast<nix::CallbackLogger *>(nix::logger);
+        if (!callback_logger)
+            throw nix::Error("the active logger does not support evaluator effect callbacks");
+        callback_logger->setEvalEffectCallback(on_eval_effect, user_data);
         return NIX_OK;
     }
     NIXC_CATCH_ERRS

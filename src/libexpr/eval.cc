@@ -28,6 +28,8 @@
 #include "nix/fetchers/input-cache.hh"
 #include "nix/util/current-process.hh"
 
+#include "eval-effect.hh"
+
 NIX_INCOMPLETE_SWITCH_BEGIN
 #include "parser-tab.hh"
 NIX_INCOMPLETE_SWITCH_END
@@ -1171,12 +1173,14 @@ void EvalState::evalFile(const SourcePath & path, Value & v, bool mustBeTrivial)
 
     if (auto v2 = getConcurrent(*fileEvalCache, *resolvedPath)) {
         printTalkative("evaluating file '%s' (cached)", *resolvedPath);
+        evalEffect(EvalEffect::EvaluatedFile, resolvedPath->to_string(), "cached");
         forceValue(**v2, noPos);
         v = **v2;
         return;
     }
 
     printTalkative("evaluating file '%s'", *resolvedPath);
+    evalEffect(EvalEffect::EvaluatedFile, resolvedPath->to_string(), "uncached");
 
     Value * vExpr;
     // FIXME: put ExprParseFile on the stack instead of the heap once
@@ -2654,6 +2658,8 @@ StorePath EvalState::copyPathToStore(NixStringContext & context, const SourcePat
         nullptr,
         repair);
     allowPath(dstPath);
+    auto dstPathS = store->printStorePath(dstPath);
+    evalEffect(EvalEffect::CopySource, path.to_string(), dstPathS);
 
     context.insert(NixStringContextElem::Opaque{.path = dstPath});
     return dstPath;

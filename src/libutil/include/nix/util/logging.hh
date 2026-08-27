@@ -186,6 +186,16 @@ public:
 
     virtual void result(ActivityId act, ResultType type, const nlohmann::json & json) noexcept {}
 
+    /**
+     * Report an evaluator dependency without creating a temporary activity.
+     *
+     * Loggers that do not consume evaluator effects intentionally ignore it.
+     */
+    virtual void
+    evalEffect(std::string_view kind, std::string_view subject, std::optional<std::string_view> detail) noexcept
+    {
+    }
+
     virtual void writeToStdout(std::string_view s);
 
     template<typename... Args>
