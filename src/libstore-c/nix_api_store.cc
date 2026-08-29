@@ -1,4 +1,5 @@
 #include <cstring>
+#include <limits>
 #include <span>
 
 #include "nix_api_store.h"
@@ -619,6 +620,33 @@ nix_err nix_store_collect_garbage(
     void * user_data,
     uint64_t * bytes_freed)
 {
+    return nix_store_collect_garbage_with_options(
+        context,
+        store,
+        action,
+        paths_to_delete,
+        num_paths,
+        ignore_liveness,
+        false,
+        max_freed,
+        callback,
+        user_data,
+        bytes_freed);
+}
+
+nix_err nix_store_collect_garbage_with_options(
+    nix_c_context * context,
+    Store * store,
+    nix_gc_action action,
+    StorePath ** paths_to_delete,
+    size_t num_paths,
+    bool ignore_liveness,
+    bool delete_referrers,
+    uint64_t max_freed,
+    nix_store_path_callback callback,
+    void * user_data,
+    uint64_t * bytes_freed)
+{
     if (context)
         context->last_err_code = NIX_OK;
     try {
@@ -652,10 +680,14 @@ nix_err nix_store_collect_garbage(
         }
 
         options.ignoreLiveness = ignore_liveness;
-        options.maxFreed = max_freed;
+        // The C API documents zero as unbounded, while GCOptions treats it
+        // literally and stops after the first positive-size deletion.
+        options.maxFreed = max_freed == 0 ? std::numeric_limits<uint64_t>::max() : max_freed;
 
-        // Add paths to delete if provided and action is DELETE_SPECIFIC
-        if (action == NIX_GC_DELETE_SPECIFIC) {
+        // A specific scope is independent from the action. In particular,
+        // DELETE_DEAD with specific paths skips live candidates instead of
+        // failing on the first one.
+        if (paths_to_delete || num_paths > 0) {
             nix::GCOptions::SpecificPaths specificPaths;
             if (num_paths > 0 && !paths_to_delete)
                 return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
@@ -664,7 +696,10 @@ nix_err nix_store_collect_garbage(
                     return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
                 specificPaths.paths.insert(paths_to_delete[i]->path);
             }
+            specificPaths.deleteReferrers = delete_referrers;
             options.pathsToDelete = std::move(specificPaths);
+        } else if (action == NIX_GC_DELETE_SPECIFIC) {
+            return context ? context->last_err_code = NIX_ERR_KEY : NIX_ERR_KEY;
         }
 
         // Run garbage collection
