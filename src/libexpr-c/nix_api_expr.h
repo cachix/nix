@@ -317,6 +317,18 @@ void nix_eval_state_builder_free(nix_eval_state_builder * builder);
 EvalState * nix_state_create(nix_c_context * context, const char ** lookupPath, Store * store);
 
 /**
+ * @brief Clear files and source-accessor entries cached by an evaluator state.
+ * @ingroup libexpr_init
+ *
+ * Use this before re-evaluating expressions after their source files may have
+ * changed. Values already returned by the evaluator remain valid.
+ *
+ * @param[out] context Optional, stores error information.
+ * @param[in] state The evaluator state whose file cache should be cleared.
+ */
+nix_err nix_eval_state_reset_file_cache(nix_c_context * context, EvalState * state);
+
+/**
  * @brief Frees a Nix state.
  * @ingroup libexpr_init
  *

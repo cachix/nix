@@ -226,6 +226,16 @@ EvalState * nix_state_create(nix_c_context * context, const char ** lookupPath_c
     return state;
 }
 
+nix_err nix_eval_state_reset_file_cache(nix_c_context * context, EvalState * state)
+{
+    nix_clear_err(context);
+    try {
+        state->state.resetFileCache();
+        return NIX_OK;
+    }
+    NIXC_CATCH_ERRS
+}
+
 void nix_state_free(EvalState * state)
 {
     if (state)

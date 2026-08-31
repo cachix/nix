@@ -66,6 +66,36 @@ TEST_F(nix_api_expr_test, nix_eval_state_lookup_path)
     nix_gc_decref(nullptr, value);
 }
 
+TEST_F(nix_api_expr_test, nix_eval_state_reset_file_cache)
+{
+    auto tmpDir = nix::createTempDir();
+    auto delTmpDir = std::make_unique<nix::AutoDelete>(tmpDir, true);
+    auto expression = tmpDir / "value.nix";
+    nix::writeFile(expression, "1");
+
+    auto evaluate = [&](int64_t expected) {
+        auto result = nix_alloc_value(ctx, state);
+        assert_ctx_ok();
+        auto source = "import " + expression.string();
+        ASSERT_EQ(NIX_OK, nix_expr_eval_from_string(ctx, state, source.c_str(), tmpDir.c_str(), result));
+        assert_ctx_ok();
+        ASSERT_EQ(NIX_OK, nix_value_force(ctx, state, result));
+        assert_ctx_ok();
+        ASSERT_EQ(expected, nix_get_int(ctx, result));
+        assert_ctx_ok();
+        ASSERT_EQ(NIX_OK, nix_gc_decref(ctx, result));
+        assert_ctx_ok();
+    };
+
+    evaluate(1);
+    nix::writeFile(expression, "2");
+    evaluate(1);
+
+    ASSERT_EQ(NIX_OK, nix_eval_state_reset_file_cache(ctx, state));
+    assert_ctx_ok();
+    evaluate(2);
+}
+
 TEST_F(nix_api_expr_test, nix_expr_eval_from_string)
 {
     nix_expr_eval_from_string(nullptr, state, "builtins.nixVersion", ".", value);
