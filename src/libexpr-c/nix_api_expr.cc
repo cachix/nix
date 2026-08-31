@@ -274,6 +274,11 @@ void nix_gc_now()
     GC_gcollect();
 }
 
+size_t nix_gc_get_refcounted_objects()
+{
+    return nix_refcounts.size();
+}
+
 #else
 nix_err nix_gc_incref(nix_c_context * context, const void *)
 {
@@ -290,6 +295,11 @@ nix_err nix_gc_decref(nix_c_context * context, const void *)
 }
 
 void nix_gc_now() {}
+
+size_t nix_gc_get_refcounted_objects()
+{
+    return 0;
+}
 #endif
 
 nix_err nix_value_incref(nix_c_context * context, nix_value * x)

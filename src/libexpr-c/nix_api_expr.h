@@ -379,6 +379,15 @@ nix_err nix_gc_decref(nix_c_context * context, const void * object);
 void nix_gc_now();
 
 /**
+ * @brief Return the number of garbage-collected objects held alive by C API
+ * reference counts.
+ *
+ * This is intended for allocator diagnostics. A non-zero value is not by
+ * itself a leak: live C API handles contribute entries until released.
+ */
+size_t nix_gc_get_refcounted_objects();
+
+/**
  * @brief Register a callback that gets called when the object is garbage
  * collected.
  * @note Objects can only have a single finalizer. This function overwrites existing values

@@ -14,6 +14,18 @@
 
 namespace nixC {
 
+TEST_F(nix_api_expr_test, nix_gc_get_refcounted_objects)
+{
+    auto before = nix_gc_get_refcounted_objects();
+    auto extraValue = nix_alloc_value(ctx, state);
+    assert_ctx_ok();
+
+    ASSERT_EQ(before + 1, nix_gc_get_refcounted_objects());
+    ASSERT_EQ(NIX_OK, nix_gc_decref(ctx, extraValue));
+    assert_ctx_ok();
+    ASSERT_EQ(before, nix_gc_get_refcounted_objects());
+}
+
 TEST_F(nix_api_expr_test, nix_eval_state_lookup_path)
 {
     auto tmpDir = nix::createTempDir();
