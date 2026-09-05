@@ -10,6 +10,30 @@ nix derivation show "$drvPath" | jq '.derivations[]' > "$TEST_HOME/simple.json"
 drvPath2=$(nix derivation add < "$TEST_HOME/simple.json")
 [[ "$drvPath" = "$drvPath2" ]]
 
+nix derivation show --cbor "$drvPath" > "$TEST_HOME/simple.cbor"
+drvPathCbor=$(nix derivation add --cbor < "$TEST_HOME/simple.cbor")
+[[ "$drvPath" = "$drvPathCbor" ]]
+[[ "$drvPath" = "$(nix derivation add --cbor --dry-run < "$TEST_HOME/simple.cbor")" ]]
+nix derivation show --cbor "$drvPathCbor" > "$TEST_HOME/simple-roundtrip.cbor"
+cmp "$TEST_HOME/simple.cbor" "$TEST_HOME/simple-roundtrip.cbor"
+nix derivation show --cbor --recursive "$drvPath" > "$TEST_HOME/recursive.cbor"
+test -s "$TEST_HOME/recursive.cbor"
+depDrvPath=$(nix-instantiate dependencies.nix)
+nix derivation show --cbor --recursive "$depDrvPath" > "$TEST_HOME/dependencies.cbor"
+nix derivation show --cbor "$drvPath" "$depDrvPath" > "$TEST_HOME/multiple.cbor"
+nix derivation show --cbor "$depDrvPath" "$drvPath" > "$TEST_HOME/multiple-reversed.cbor"
+cmp "$TEST_HOME/multiple.cbor" "$TEST_HOME/multiple-reversed.cbor"
+expectStderr 1 nix derivation add --cbor < "$TEST_HOME/simple.json" | grepQuiet 'CBOR'
+
+verbatimDrv=$(nix-instantiate --expr 'with import ./config.nix; mkDerivation {
+  name = "verbatim-structured-attrs";
+  __json = "{ \"z\": 0, \"a\": 1 }";
+}')
+nix derivation show --cbor "$verbatimDrv" > "$TEST_HOME/verbatim.cbor"
+[[ "$verbatimDrv" = "$(nix derivation add --cbor < "$TEST_HOME/verbatim.cbor")" ]]
+nix derivation show --cbor "$verbatimDrv" > "$TEST_HOME/verbatim-roundtrip.cbor"
+cmp "$TEST_HOME/verbatim.cbor" "$TEST_HOME/verbatim-roundtrip.cbor"
+
 # Derivation is input addressed, all outputs have a path
 jq -e '.outputs | .[] | has("path")' < "$TEST_HOME/simple.json"
 
