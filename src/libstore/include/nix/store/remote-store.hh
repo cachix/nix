@@ -94,6 +94,18 @@ public:
     StorePathSet querySubstitutablePaths(const StorePathSet & paths) override;
 
     void querySubstitutablePathInfos(const StorePathCAMap & paths, SubstitutablePathInfos & infos) override;
+
+    /**
+     * Builds and substitutions run in the daemon, so a substituter added
+     * at runtime is also forwarded there via the `substituters` setting.
+     */
+    bool addSubstituter(const std::string & uri) override;
+
+    /**
+     * Forward the updated `trusted-public-keys` to the daemon as well.
+     */
+    void addTrustedPublicKeys(const Strings & keys) override;
+
     /**
      * Add a content-addressable store path. `dump` will be drained.
      */
