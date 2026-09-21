@@ -4,6 +4,7 @@
 
 #include "nix/expr/eval.hh"
 #include "nix/expr/eval-gc.hh"
+#include "nix/expr/root-value.hh"
 #include "nix/store/globals.hh"
 #include "nix/expr/eval-settings.hh"
 #include "nix/util/ref.hh"
@@ -152,8 +153,8 @@ nix_err nix_eval_state_builder_set_lookup_path(
     NIXC_CATCH_ERRS
 }
 
-nix_err nix_eval_state_builder_set_base_directory(
-    nix_c_context * context, nix_eval_state_builder * builder, const char * path)
+nix_err
+nix_eval_state_builder_set_base_directory(nix_c_context * context, nix_eval_state_builder * builder, const char * path)
 {
     if (context)
         context->last_err_code = NIX_OK;
@@ -234,20 +235,27 @@ void nix_state_free(EvalState * state)
 }
 
 #if NIX_USE_BOEHMGC
-boost::concurrent_flat_map<
-    const void *,
-    unsigned int,
-    std::hash<const void *>,
-    std::equal_to<const void *>,
-    traceable_allocator<std::pair<const void * const, unsigned int>>>
-    nix_refcounts{};
+struct RootedReference
+{
+    nix::RootObject root;
+    unsigned int count = 1;
+
+    explicit RootedReference(const void * p)
+        : root(p)
+    {
+    }
+};
+
+// Only the pool slots are GC-visible. Erased keys in the table's ordinary
+// allocation must not keep objects alive after their last reference is gone.
+boost::concurrent_flat_map<const void *, RootedReference> nix_refcounts{};
 
 nix_err nix_gc_incref(nix_c_context * context, const void * p)
 {
     if (context)
         context->last_err_code = NIX_OK;
     try {
-        nix_refcounts.insert_or_visit({p, 1}, [](auto & kv) { kv.second++; });
+        nix_refcounts.try_emplace_or_visit(p, p, [](auto & kv) { kv.second.count++; });
     }
     NIXC_CATCH_ERRS
 }
@@ -261,7 +269,7 @@ nix_err nix_gc_decref(nix_c_context * context, const void * p)
         bool fail = true;
         nix_refcounts.erase_if(p, [&](auto & kv) {
             fail = false;
-            return !--kv.second;
+            return !--kv.second.count;
         });
         if (fail)
             throw std::runtime_error("nix_gc_decref: object was not referenced");

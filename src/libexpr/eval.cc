@@ -1181,7 +1181,7 @@ void EvalState::evalFile(const SourcePath & path, Value & v, bool mustBeTrivial)
         [&](auto & i) {
             vExpr = allocValue();
             vExpr->mkThunk(&baseEnv, expr);
-            *i.second = vExpr;
+            i.second.set(vExpr);
         },
         [&](auto & i) { vExpr = *i.second; });
 

@@ -3,6 +3,9 @@
 
 #include "nix/expr/eval.hh"
 #include "nix/expr/tests/libexpr.hh"
+#include "nix/expr/tests/gc.hh"
+#include "nix/util/file-system.hh"
+#include "nix/util/finally.hh"
 
 namespace nix {
 
@@ -210,5 +213,44 @@ TEST_F(PureEvalTest, pathExists)
         ASSERT_THAT(eval("builtins.readDir /."), IsAttrsOfSize(0));
     }
 }
+
+#if NIX_USE_BOEHMGC
+TEST_F(LibExprTest, resetFileCacheReleasesValues)
+{
+    auto tmpDir = createTempDir();
+    AutoDelete delTmpDir(tmpDir, true);
+    auto file = tmpDir / "test.nix";
+    writeFile(file, "{ a = 1; }");
+
+    auto weak = static_cast<void **>(GC_MALLOC_ATOMIC(sizeof(void *)));
+    ASSERT_NE(nullptr, weak);
+    *weak = nullptr;
+    Finally cleanup([&] {
+        GC_unregister_disappearing_link(weak);
+        GC_FREE(weak);
+    });
+
+    runOnGCThread([&] {
+        Value v;
+        state.evalFile(state.rootPath(CanonPath(file.string())), v);
+        ASSERT_EQ(nAttrs, v.type());
+        auto attrs = const_cast<Bindings *>(v.attrs());
+        *weak = attrs;
+        ASSERT_EQ(GC_SUCCESS, GC_GENERAL_REGISTER_DISAPPEARING_LINK(weak, attrs));
+    });
+    ASSERT_FALSE(HasFatalFailure());
+
+    /* The cached value keeps the attribute set alive. */
+    GC_gcollect();
+    ASSERT_NE(nullptr, *weak);
+
+    /* Clearing the cache must not leave stale roots in its storage. */
+    state.resetFileCache();
+    for (int i = 0; i < 3; ++i)
+        GC_gcollect();
+
+    EXPECT_EQ(nullptr, *weak);
+}
+#endif
 
 } // namespace nix
