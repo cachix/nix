@@ -8,7 +8,7 @@ extern "C" {
 /**
  * @brief Internal representation of a ValMap
  *
- * This wraps nix::ValMap (which is std::map<std::string, Value*>)
+ * This wraps nix::ValMap (which is std::map<std::string, RootValue>)
  */
 struct nix_valmap
 {
