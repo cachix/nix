@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 #include <thread>
+#include <exception>
 
 #if NIX_USE_BOEHMGC
 
@@ -21,17 +22,24 @@ namespace nix {
  */
 inline void runOnGCThread(auto fn)
 {
+    std::exception_ptr exception;
     std::thread([&] {
-        GC_stack_base base;
-        ASSERT_EQ(GC_SUCCESS, GC_get_stack_base(&base));
-        auto registered = GC_register_my_thread(&base);
-        ASSERT_TRUE(registered == GC_SUCCESS || registered == GC_DUPLICATE);
-        Finally unregister([&] {
-            if (registered == GC_SUCCESS)
-                GC_unregister_my_thread();
-        });
-        fn();
+        try {
+            GC_stack_base base;
+            ASSERT_EQ(GC_SUCCESS, GC_get_stack_base(&base));
+            auto registered = GC_register_my_thread(&base);
+            ASSERT_TRUE(registered == GC_SUCCESS || registered == GC_DUPLICATE);
+            Finally unregister([&] {
+                if (registered == GC_SUCCESS)
+                    GC_unregister_my_thread();
+            });
+            fn();
+        } catch (...) {
+            exception = std::current_exception();
+        }
     }).join();
+    if (exception)
+        std::rethrow_exception(exception);
 }
 
 } // namespace nix

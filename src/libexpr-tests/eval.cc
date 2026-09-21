@@ -1,10 +1,13 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <gtest/gtest-spi.h>
+
+#include <stdexcept>
 
 #include "nix/expr/eval.hh"
 #include "nix/expr/tests/libexpr.hh"
 #include "nix/expr/tests/gc.hh"
-#include "nix/util/file-system.hh"
+#include "nix/util/memory-source-accessor.hh"
 #include "nix/util/finally.hh"
 
 namespace nix {
@@ -215,12 +218,20 @@ TEST_F(PureEvalTest, pathExists)
 }
 
 #if NIX_USE_BOEHMGC
+TEST_F(LibExprTest, gcThreadReportsFatalAssertion)
+{
+    EXPECT_FATAL_FAILURE_ON_ALL_THREADS(runOnGCThread([] { FAIL() << "worker assertion"; }), "worker assertion");
+}
+
+TEST_F(LibExprTest, gcThreadPropagatesException)
+{
+    EXPECT_THROW(runOnGCThread([] { throw std::runtime_error("worker exception"); }), std::runtime_error);
+}
+
 TEST_F(LibExprTest, resetFileCacheReleasesValues)
 {
-    auto tmpDir = createTempDir();
-    AutoDelete delTmpDir(tmpDir, true);
-    auto file = tmpDir / "test.nix";
-    writeFile(file, "{ a = 1; }");
+    auto accessor = make_ref<MemorySourceAccessor>();
+    auto file = accessor->addFile(CanonPath("/test.nix"), "{ a = 1; }");
 
     auto weak = static_cast<void **>(GC_MALLOC_ATOMIC(sizeof(void *)));
     ASSERT_NE(nullptr, weak);
@@ -232,7 +243,7 @@ TEST_F(LibExprTest, resetFileCacheReleasesValues)
 
     runOnGCThread([&] {
         Value v;
-        state.evalFile(state.rootPath(CanonPath(file.string())), v);
+        state.evalFile(file, v);
         ASSERT_EQ(nAttrs, v.type());
         auto attrs = const_cast<Bindings *>(v.attrs());
         *weak = attrs;
