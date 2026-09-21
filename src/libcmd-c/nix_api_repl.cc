@@ -30,7 +30,9 @@ namespace {
         nix::ref<nix::EvalState> state,
         nix::ValMap const& env)
     {
-        g_captured_debug_env = env;
+        g_captured_debug_env.emplace();
+        for (const auto & [name, value] : env)
+            g_captured_debug_env->emplace(name, nix::RootValue(*value));
         // Snapshot debug traces before stack unwinding destroys them.
         // DebugTraceStacker RAII guards pop entries from debugTraces
         // during C++ exception unwinding, so we must copy now.
@@ -86,7 +88,7 @@ nix_err nix_valmap_insert(nix_c_context * context, nix_valmap * map, const char 
         return NIX_OK;
     }
     try {
-        map->map[key] = value->value;
+        map->map.insert_or_assign(key, nix::RootValue(value->value));
         return NIX_OK;
     }
     NIXC_CATCH_ERRS
@@ -106,7 +108,8 @@ nix_err nix_repl_run_simple(
     try {
         nix::ValMap env;
         if (extra_env != nullptr) {
-            env = extra_env->map;
+            for (const auto & [name, value] : extra_env->map)
+                env.emplace(name, nix::RootValue(*value));
         }
 
         // Use the shared_ptr stored in the EvalState struct
