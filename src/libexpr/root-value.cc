@@ -23,11 +23,11 @@ namespace {
  */
 union Slot
 {
-    Value * value;
+    const void * value;
     Slot * nextFree;
 };
 
-static_assert(sizeof(Slot) == sizeof(Value *));
+static_assert(sizeof(Slot) == sizeof(const void *));
 } // namespace
 
 /* Head of the freelist of slots. Never destroyed since root values
@@ -36,7 +36,7 @@ static auto & freeSlots = *new Sync<Slot *>{nullptr};
 
 #endif
 
-RootValue::RootValue(Value * v)
+RootObject::RootObject(const void * v)
 {
 #if NIX_USE_BOEHMGC
     Slot * slot;
@@ -60,11 +60,11 @@ RootValue::RootValue(Value * v)
 
     this->slot = &slot->value;
 #else
-    this->slot = new Value *(v);
+    this->slot = new const void *(v);
 #endif
 }
 
-void RootValue::freeRootValueSlot()
+void RootObject::freeRootObjectSlot()
 {
 #if NIX_USE_BOEHMGC
     /* Note: writing `nextFree` overwrites the `Value *`, so this also

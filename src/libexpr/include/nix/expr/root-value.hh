@@ -9,48 +9,45 @@ namespace nix {
 struct Value;
 
 /**
- * A move-only handle rooting a Value, i.e. keeping it and everything
- * reachable from it alive across garbage collections. Prefer this
- * over `RootValue` unless the handle must be copyable (e.g. when it's
- * captured in a `std::function`-backed lambda).
+ * A move-only handle keeping a GC object and everything reachable from it
+ * alive. Root slots are recycled through a pool shared with RootValue.
  */
-class RootValue
+class RootObject
 {
-    Value ** slot = nullptr;
+    const void ** slot = nullptr;
 
     /**
      * Clear the given slot and return it to the root value pool.
      */
-    void freeRootValueSlot();
+    void freeRootObjectSlot();
 
 public:
-    RootValue() = default;
+    RootObject() = default;
 
     /**
      * Allocate a slot from the root value pool, i.e. a GC-visible
-     * `Value *` cell that keeps the value it points to alive across
-     * garbage collections. Use `RootValue`/`RootValue` rather than
-     * calling this directly.
+     * pointer cell that keeps the value it points to alive across
+     * garbage collections.
      */
-    explicit RootValue(Value * v);
+    explicit RootObject(const void * v);
 
-    RootValue(const RootValue &) = delete;
-    RootValue & operator=(const RootValue &) = delete;
+    RootObject(const RootObject &) = delete;
+    RootObject & operator=(const RootObject &) = delete;
 
-    RootValue(RootValue && other) noexcept
+    RootObject(RootObject && other) noexcept
         : slot(std::exchange(other.slot, nullptr))
     {
     }
 
-    RootValue & operator=(RootValue && other) noexcept
+    RootObject & operator=(RootObject && other) noexcept
     {
         if (slot)
-            freeRootValueSlot();
+            freeRootObjectSlot();
         slot = std::exchange(other.slot, nullptr);
         return *this;
     }
 
-    ~RootValue()
+    ~RootObject()
     {
         reset();
     }
@@ -61,10 +58,16 @@ public:
     void reset()
     {
         if (slot)
-            freeRootValueSlot();
+            freeRootObjectSlot();
     }
 
-    Value *& operator*() const
+    /** Update the object held by an allocated root slot. */
+    void set(const void * p)
+    {
+        *slot = p;
+    }
+
+    const void * operator*() const
     {
         return *slot;
     }
@@ -72,6 +75,28 @@ public:
     explicit operator bool() const
     {
         return slot != nullptr;
+    }
+};
+
+/** A typed root handle for evaluator values. */
+class RootValue : public RootObject
+{
+public:
+    RootValue() = default;
+
+    explicit RootValue(Value * v)
+        : RootObject(v)
+    {
+    }
+
+    void set(Value * v)
+    {
+        RootObject::set(v);
+    }
+
+    Value * operator*() const
+    {
+        return static_cast<Value *>(const_cast<void *>(RootObject::operator*()));
     }
 };
 
