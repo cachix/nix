@@ -27,6 +27,8 @@ public:
      * Time this connection was established.
      */
     std::chrono::time_point<std::chrono::steady_clock> startTime;
+
+    size_t settingsGeneration = 0;
 };
 
 /**

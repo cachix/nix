@@ -1415,6 +1415,7 @@ void Store::removeTrustedPublicKeys(const Strings & keys)
 
 bool Store::removeSubstituter(const std::string & uri)
 {
+    initSubstituters();
     auto lock = std::lock_guard(substituters_mutex);
 
     auto it = substituters.begin();
@@ -1435,6 +1436,7 @@ void Store::clearSubstituters()
 {
     auto lock = std::lock_guard(substituters_mutex);
     substituters.clear();
+    substituters_initialized = true;
     debug("Cleared all substituters");
 }
 

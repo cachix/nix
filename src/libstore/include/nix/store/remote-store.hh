@@ -94,6 +94,12 @@ public:
      */
     void addTrustedPublicKeys(const Strings & keys) override;
 
+    void removeTrustedPublicKeys(const Strings & keys) override;
+
+    bool removeSubstituter(const std::string & uri) override;
+
+    void clearSubstituters() override;
+
     /**
      * Add a content-addressable store path. `dump` will be drained.
      */
@@ -220,6 +226,10 @@ private:
     ref<RemoteFSAccessor> getRemoteFSAccessor(bool requireValidPath = true);
 
     std::atomic_bool failed{false};
+
+    std::atomic<size_t> settingsGeneration{0};
+
+    void reconnectWithUpdatedSettings();
 
     /**
      * Track all active connection file descriptors (both idle and in-use).

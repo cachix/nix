@@ -1116,12 +1116,12 @@ public:
      * @param uri The URI of the substituter to remove
      * @return true if removed, false if not found
      */
-    bool removeSubstituter(const std::string & uri);
+    virtual bool removeSubstituter(const std::string & uri);
 
     /**
      * Clear all substituters from this store.
      */
-    void clearSubstituters();
+    virtual void clearSubstituters();
 
     /**
      * Synchronises the options of the client with those of the daemon

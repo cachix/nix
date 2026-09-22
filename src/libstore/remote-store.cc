@@ -41,7 +41,9 @@ RemoteStore::RemoteStore(const Config & config)
           make_ref<Pool<Connection>>(
               std::max(1, config.maxConnections.get()),
               [this]() {
+                  auto generation = settingsGeneration.load();
                   auto conn = openConnectionWrapper();
+                  conn->settingsGeneration = generation;
                   try {
                       initConnection(*conn);
                   } catch (...) {
@@ -53,7 +55,7 @@ RemoteStore::RemoteStore(const Config & config)
                   return conn;
               },
               [this](const ref<Connection> & r) {
-                  return r->to.good() && r->from.good()
+                  return r->settingsGeneration == settingsGeneration.load() && r->to.good() && r->from.good()
                          && std::chrono::duration_cast<std::chrono::seconds>(
                                 std::chrono::steady_clock::now() - r->startTime)
                                     .count()
@@ -179,6 +181,15 @@ void RemoteStore::setOptions()
     setOptions(*(getConnection().handle));
 }
 
+void RemoteStore::reconnectWithUpdatedSettings()
+{
+    // A fresh daemon connection also refreshes its cached substituters and public keys.
+    // Connections still in use are retired by the pool validator when next acquired.
+    ++settingsGeneration;
+    connections->flushBad();
+    getConnection();
+}
+
 bool RemoteStore::addSubstituter(const std::string & uri)
 {
     if (!Store::addSubstituter(uri))
@@ -188,14 +199,41 @@ bool RemoteStore::addSubstituter(const std::string & uri)
     auto refs = substituters.get();
     refs.push_back(StoreReference::parse(uri));
     substituters.override(refs);
-    setOptions();
+    reconnectWithUpdatedSettings();
     return true;
 }
 
 void RemoteStore::addTrustedPublicKeys(const Strings & keys)
 {
     Store::addTrustedPublicKeys(keys);
-    setOptions();
+    reconnectWithUpdatedSettings();
+}
+
+void RemoteStore::removeTrustedPublicKeys(const Strings & keys)
+{
+    Store::removeTrustedPublicKeys(keys);
+    reconnectWithUpdatedSettings();
+}
+
+bool RemoteStore::removeSubstituter(const std::string & uri)
+{
+    auto canonicalUri = StoreReference::parse(uri).render(false);
+    if (!Store::removeSubstituter(canonicalUri))
+        return false;
+
+    auto & substituters = settings.getWorkerSettings().substituters;
+    auto refs = substituters.get();
+    std::erase_if(refs, [&](const auto & ref) { return ref.render(false) == canonicalUri; });
+    substituters.override(refs);
+    reconnectWithUpdatedSettings();
+    return true;
+}
+
+void RemoteStore::clearSubstituters()
+{
+    Store::clearSubstituters();
+    settings.getWorkerSettings().substituters.override({});
+    reconnectWithUpdatedSettings();
 }
 
 bool RemoteStore::isValidPathUncached(const StorePath & path)
