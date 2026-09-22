@@ -39,6 +39,8 @@ public:
      * reduces communication overhead. LRU eviction would cost a round-trip.
      */
     LRUCache<StorePath, std::monostate> tempRootsPinned{65536};
+
+    size_t settingsGeneration = 0;
 };
 
 /**

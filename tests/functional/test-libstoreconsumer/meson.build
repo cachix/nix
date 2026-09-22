@@ -11,3 +11,12 @@ libstoreconsumer_tester = executable(
   ],
   build_by_default : false,
 )
+
+runtime_substituters_tester = executable(
+  'runtime-substituters',
+  'runtime-substituters.cc',
+  dependencies : deps_private_no_pkgconfig + [
+    dependency('nix-store'),
+  ],
+  build_by_default : false,
+)
