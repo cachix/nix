@@ -1590,7 +1590,10 @@ Hash resolveRemoteRef(const std::string & url, const std::string & ref, const He
         return GIT_PASSTHROUGH;
     };
 
-    if (git_remote_connect(remote.get(), GIT_DIRECTION_FETCH, &callbacks, nullptr, nullptr))
+    git_proxy_options proxyOptions = GIT_PROXY_OPTIONS_INIT;
+    proxyOptions.type = GIT_PROXY_AUTO;
+
+    if (git_remote_connect(remote.get(), GIT_DIRECTION_FETCH, &callbacks, &proxyOptions, nullptr))
         throw Error("connecting to remote '%s': %s", url, git_error_last()->message);
 
     const git_remote_head ** refs;
