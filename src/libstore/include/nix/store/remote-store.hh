@@ -229,6 +229,14 @@ private:
 
     std::atomic<size_t> settingsGeneration{0};
 
+    struct SubstituterSettings
+    {
+        std::vector<StoreReference> refs;
+        bool forward;
+    };
+
+    Sync<SubstituterSettings> substituterSettings;
+
     void reconnectWithUpdatedSettings();
 
     /**

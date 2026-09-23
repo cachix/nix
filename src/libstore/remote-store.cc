@@ -21,6 +21,7 @@
 #include "nix/store/filetransfer.hh"
 #include "nix/util/signals.hh"
 #include "nix/util/socket.hh"
+#include <algorithm>
 #include <variant>
 
 #ifndef _WIN32
@@ -61,6 +62,11 @@ RemoteStore::RemoteStore(const Config & config)
                                     .count()
                                 < this->config.maxConnectionAge;
               }))
+    , substituterSettings(
+          SubstituterSettings{
+              .refs = settings.getWorkerSettings().substituters.get(),
+              .forward = settings.getWorkerSettings().substituters.isOverridden(),
+          })
 {
 }
 
@@ -149,6 +155,18 @@ void RemoteStore::setOptions(Connection & conn)
     overrides.erase(loggerSettings.showTrace.name);
     overrides.erase(experimentalFeatureSettings.experimentalFeatures.name);
     overrides.erase("plugin-files");
+    overrides.erase(settings.getWorkerSettings().substituters.name);
+    {
+        auto substituters = substituterSettings.lock();
+        if (substituters->forward) {
+            Strings refs;
+            for (const auto & ref : substituters->refs)
+                refs.push_back(ref.render());
+            overrides.emplace(
+                settings.getWorkerSettings().substituters.name,
+                nix::Config::SettingInfo{.value = concatStringsSep(" ", refs)});
+        }
+    }
     conn.to << overrides.size();
     for (auto & i : overrides)
         conn.to << i.first << i.second.value;
@@ -187,7 +205,6 @@ void RemoteStore::reconnectWithUpdatedSettings()
     // Connections still in use are retired by the pool validator when next acquired.
     ++settingsGeneration;
     connections->flushBad();
-    getConnection();
 }
 
 bool RemoteStore::addSubstituter(const std::string & uri)
@@ -195,10 +212,11 @@ bool RemoteStore::addSubstituter(const std::string & uri)
     if (!Store::addSubstituter(uri))
         return false;
 
-    auto & substituters = settings.getWorkerSettings().substituters;
-    auto refs = substituters.get();
-    refs.push_back(StoreReference::parse(uri));
-    substituters.override(refs);
+    {
+        auto substituters = substituterSettings.lock();
+        substituters->refs.push_back(StoreReference::parse(uri));
+        substituters->forward = true;
+    }
     reconnectWithUpdatedSettings();
     return true;
 }
@@ -218,13 +236,28 @@ void RemoteStore::removeTrustedPublicKeys(const Strings & keys)
 bool RemoteStore::removeSubstituter(const std::string & uri)
 {
     auto canonicalUri = StoreReference::parse(uri).render(false);
+    std::optional<StoreReference::Params> removedParams;
+    for (const auto & sub : getSubstituters()) {
+        if (sub->config.getHumanReadableURI() == canonicalUri) {
+            removedParams = sub->config.getQueryParams();
+            break;
+        }
+    }
     if (!Store::removeSubstituter(canonicalUri))
         return false;
 
-    auto & substituters = settings.getWorkerSettings().substituters;
-    auto refs = substituters.get();
-    std::erase_if(refs, [&](const auto & ref) { return ref.render(false) == canonicalUri; });
-    substituters.override(refs);
+    {
+        auto substituters = substituterSettings.lock();
+        auto ref = std::ranges::find_if(substituters->refs, [&](const auto & ref) {
+            return ref.render(false) == canonicalUri && removedParams && ref.params == *removedParams;
+        });
+        if (ref == substituters->refs.end())
+            ref = std::ranges::find_if(
+                substituters->refs, [&](const auto & ref) { return ref.render(false) == canonicalUri; });
+        if (ref != substituters->refs.end())
+            substituters->refs.erase(ref);
+        substituters->forward = true;
+    }
     reconnectWithUpdatedSettings();
     return true;
 }
@@ -232,7 +265,11 @@ bool RemoteStore::removeSubstituter(const std::string & uri)
 void RemoteStore::clearSubstituters()
 {
     Store::clearSubstituters();
-    settings.getWorkerSettings().substituters.override({});
+    {
+        auto substituters = substituterSettings.lock();
+        substituters->refs.clear();
+        substituters->forward = true;
+    }
     reconnectWithUpdatedSettings();
 }
 
