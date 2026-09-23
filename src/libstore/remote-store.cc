@@ -8,6 +8,7 @@
 #include "nix/store/build-result.hh"
 #include "nix/store/remote-store.hh"
 #include "nix/store/remote-store-connection.hh"
+#include "nix/store/store-reference.hh"
 #include "nix/store/worker-protocol.hh"
 #include "nix/store/worker-protocol-impl.hh"
 #include "nix/util/archive.hh"
@@ -20,6 +21,7 @@
 #include "nix/store/filetransfer.hh"
 #include "nix/util/signals.hh"
 #include "nix/util/socket.hh"
+#include <algorithm>
 #include <variant>
 
 #ifndef _WIN32
@@ -40,7 +42,9 @@ RemoteStore::RemoteStore(const Config & config)
           make_ref<Pool<Connection>>(
               std::max(1, config.maxConnections.get()),
               [this]() {
+                  auto generation = settingsGeneration.load();
                   auto conn = openConnectionWrapper();
+                  conn->settingsGeneration = generation;
                   try {
                       initConnection(*conn);
                   } catch (...) {
@@ -52,12 +56,17 @@ RemoteStore::RemoteStore(const Config & config)
                   return conn;
               },
               [this](const ref<Connection> & r) {
-                  return r->to.good() && r->from.good()
+                  return r->settingsGeneration == settingsGeneration.load() && r->to.good() && r->from.good()
                          && std::chrono::duration_cast<std::chrono::seconds>(
                                 std::chrono::steady_clock::now() - r->startTime)
                                     .count()
                                 < this->config.maxConnectionAge;
               }))
+    , substituterSettings(
+          SubstituterSettings{
+              .refs = settings.getWorkerSettings().substituters.get(),
+              .forward = settings.getWorkerSettings().substituters.isOverridden(),
+          })
 {
 }
 
@@ -146,6 +155,18 @@ void RemoteStore::setOptions(Connection & conn)
     overrides.erase(loggerSettings.showTrace.name);
     overrides.erase(experimentalFeatureSettings.experimentalFeatures.name);
     overrides.erase("plugin-files");
+    overrides.erase(settings.getWorkerSettings().substituters.name);
+    {
+        auto substituters = substituterSettings.lock();
+        if (substituters->forward) {
+            Strings refs;
+            for (const auto & ref : substituters->refs)
+                refs.push_back(ref.render());
+            overrides.emplace(
+                settings.getWorkerSettings().substituters.name,
+                nix::Config::SettingInfo{.value = concatStringsSep(" ", refs)});
+        }
+    }
     conn.to << overrides.size();
     for (auto & i : overrides)
         conn.to << i.first << i.second.value;
@@ -176,6 +197,80 @@ RemoteStore::ConnectionHandle RemoteStore::getConnection()
 void RemoteStore::setOptions()
 {
     setOptions(*(getConnection().handle));
+}
+
+void RemoteStore::reconnectWithUpdatedSettings()
+{
+    // A fresh daemon connection also refreshes its cached substituters and public keys.
+    // Connections still in use are retired by the pool validator when next acquired.
+    ++settingsGeneration;
+    connections->flushBad();
+}
+
+bool RemoteStore::addSubstituter(const std::string & uri)
+{
+    if (!Store::addSubstituter(uri))
+        return false;
+
+    {
+        auto substituters = substituterSettings.lock();
+        substituters->refs.push_back(StoreReference::parse(uri));
+        substituters->forward = true;
+    }
+    reconnectWithUpdatedSettings();
+    return true;
+}
+
+void RemoteStore::addTrustedPublicKeys(const Strings & keys)
+{
+    Store::addTrustedPublicKeys(keys);
+    reconnectWithUpdatedSettings();
+}
+
+void RemoteStore::removeTrustedPublicKeys(const Strings & keys)
+{
+    Store::removeTrustedPublicKeys(keys);
+    reconnectWithUpdatedSettings();
+}
+
+bool RemoteStore::removeSubstituter(const std::string & uri)
+{
+    auto canonicalUri = StoreReference::parse(uri).render(false);
+    std::optional<StoreReference::Params> removedParams;
+    for (const auto & sub : getSubstituters()) {
+        if (sub->config.getHumanReadableURI() == canonicalUri) {
+            removedParams = sub->config.getQueryParams();
+            break;
+        }
+    }
+    if (!Store::removeSubstituter(canonicalUri))
+        return false;
+
+    {
+        auto substituters = substituterSettings.lock();
+        auto ref = std::ranges::find_if(substituters->refs, [&](const auto & ref) {
+            return ref.render(false) == canonicalUri && removedParams && ref.params == *removedParams;
+        });
+        if (ref == substituters->refs.end())
+            ref = std::ranges::find_if(
+                substituters->refs, [&](const auto & ref) { return ref.render(false) == canonicalUri; });
+        if (ref != substituters->refs.end())
+            substituters->refs.erase(ref);
+        substituters->forward = true;
+    }
+    reconnectWithUpdatedSettings();
+    return true;
+}
+
+void RemoteStore::clearSubstituters()
+{
+    Store::clearSubstituters();
+    {
+        auto substituters = substituterSettings.lock();
+        substituters->refs.clear();
+        substituters->forward = true;
+    }
+    reconnectWithUpdatedSettings();
 }
 
 bool RemoteStore::isValidPathUncached(const StorePath & path)

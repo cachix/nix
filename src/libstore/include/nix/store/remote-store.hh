@@ -84,6 +84,23 @@ public:
     void querySubstitutablePathInfos(const StorePathCAMap & paths, SubstitutablePathInfos & infos) override;
 
     /**
+     * Builds and substitutions run in the daemon, so a substituter added
+     * at runtime is also forwarded there via the `substituters` setting.
+     */
+    bool addSubstituter(const std::string & uri) override;
+
+    /**
+     * Forward the updated `trusted-public-keys` to the daemon as well.
+     */
+    void addTrustedPublicKeys(const Strings & keys) override;
+
+    void removeTrustedPublicKeys(const Strings & keys) override;
+
+    bool removeSubstituter(const std::string & uri) override;
+
+    void clearSubstituters() override;
+
+    /**
      * Add a content-addressable store path. `dump` will be drained.
      */
     ref<const ValidPathInfo> addCAToStore(
@@ -209,6 +226,18 @@ private:
     ref<RemoteFSAccessor> getRemoteFSAccessor(bool requireValidPath = true);
 
     std::atomic_bool failed{false};
+
+    std::atomic<size_t> settingsGeneration{0};
+
+    struct SubstituterSettings
+    {
+        std::vector<StoreReference> refs;
+        bool forward;
+    };
+
+    Sync<SubstituterSettings> substituterSettings;
+
+    void reconnectWithUpdatedSettings();
 
     /**
      * Track all active connection file descriptors (both idle and in-use).

@@ -194,9 +194,11 @@ if nix_store.found()
     'name' : 'libstoreconsumer',
     'deps' : [
       libstoreconsumer_tester,
+      runtime_substituters_tester,
     ],
     'tests' : [
       'test-libstoreconsumer.sh',
+      'runtime-substituters.sh',
     ],
     'workdir' : meson.current_source_dir(),
   }
