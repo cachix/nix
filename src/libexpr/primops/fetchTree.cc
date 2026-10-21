@@ -471,6 +471,17 @@ static RegisterPrimOp primop_fetchFinalTree({
     .internal = true,
 });
 
+static RegisterPrimOp primop_publicFetchFinalTree({
+    .name = "__fetchFinalTree",
+    .args = {"input"},
+    .doc = R"(
+      Like `fetchTree`, but does not return any additional fetcher attributes (like `revCount`).
+      This allows inputs to be substituted if `narHash` is specified.
+    )",
+    .impl = prim_fetchFinalTree,
+    .experimentalFeature = Xp::FetchTree,
+});
+
 static void fetch(
     EvalState & state,
     const PosIdx pos,
