@@ -95,6 +95,7 @@ suites = [
       'external-builders.sh',
       'extra-sandbox-profile.sh',
       'fetchClosure.sh',
+      'fetchFinalTree.sh',
       'fetchGit.sh',
       'fetchGitRev.sh',
       'fetchGitRefs.sh',
