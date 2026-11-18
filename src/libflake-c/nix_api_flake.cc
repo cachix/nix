@@ -289,6 +289,15 @@ nix_flake_input * nix_flake_input_new(nix_c_context * context, nix_flake_referen
     NIXC_CATCH_ERRS_NULL
 }
 
+nix_flake_input * nix_flake_input_new_empty(nix_c_context * context)
+{
+    nix_clear_err(context);
+    try {
+        return new nix_flake_input{};
+    }
+    NIXC_CATCH_ERRS_NULL
+}
+
 nix_err nix_flake_input_set_follows(
     nix_c_context * context, nix_flake_input * input, const char * followsPath, size_t followsPathLen)
 {

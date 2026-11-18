@@ -359,6 +359,18 @@ nix_flake_input *
 nix_flake_input_new(nix_c_context * context, nix_flake_reference * flakeRef, bool isFlake);
 
 /**
+ * @brief Create a flake input with no reference or follows target.
+ * Use this to attach overrides to an existing nested input without changing
+ * how that input is resolved, or to construct a follows-only input.
+ * @param[out] context Optional, stores error information
+ * @return A new nix_flake_input or NULL on failure
+ * @see nix_flake_input_set_overrides
+ * @see nix_flake_input_set_follows
+ * @see nix_flake_input_free
+ */
+nix_flake_input * nix_flake_input_new_empty(nix_c_context * context);
+
+/**
  * @brief Set the follows attribute for a flake input
  * @param[out] context Optional, stores error information
  * @param[in] input The input to modify
